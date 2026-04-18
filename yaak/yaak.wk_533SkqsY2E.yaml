@@ -1,0 +1,15 @@
+type: workspace
+model: workspace
+id: wk_533SkqsY2E
+createdAt: 2026-04-18T21:38:02.399194808
+updatedAt: 2026-04-18T21:38:08.136693756
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: domus
+encryptionKeyChallenge: eUE0azNuQwH7I3LeoDWa1gxdPguAMQ8uBJ5SqGupbCvRqvHETDw6sEWzXytG2fKWOXm/i6D/NAOzFMLwEhFjnqyyojkr9QNX3bTPPFtQ2WYY2gCsi+bFsw+v4ktopjRYbS0=
+settingValidateCertificates: true
+settingFollowRedirects: true
+settingRequestTimeout: 0
+settingDnsOverrides: []

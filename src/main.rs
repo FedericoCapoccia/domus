@@ -1,53 +1,39 @@
-use axum::{Router, routing::get};
-use sqlx::PgPool;
+mod platform;
+
+use axum::Router;
+use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
 use tokio::net::TcpListener;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
         )
         .with(tracing_subscriber::fmt::layer().with_target(false))
         .init();
 
-    let database_url = match std::env::var("DATABASE_URL") {
-        Ok(ok) => ok,
-        Err(err) => {
-            tracing::error!(error = %err, "Failed to read connection string from env");
-            return;
-        }
-    };
-    let pool = match PgPool::connect(&database_url).await {
-        Ok(ok) => ok,
-        Err(err) => {
-            tracing::error!(error = %err, "Failed to connect to DB");
-            return;
-        }
-    };
+    let opts = PgConnectOptions::new()
+        .host("localhost")
+        .port(5432)
+        .username(&std::env::var("POSTGRES_USER")?)
+        .password(&std::env::var("POSTGRES_PASSWORD")?)
+        .database(&std::env::var("POSTGRES_DB")?)
+        .log_statements(tracing::log::LevelFilter::Trace);
 
-    match sqlx::migrate!().run(&pool).await {
-        Ok(_) => tracing::info!("Migrations applied"),
-        Err(err) => {
-            tracing::error!(error = %err, "Failed to apply migrations");
-            return;
-        }
-    }
+    let pool = PgPool::connect_with(opts).await?;
 
-    let router = Router::new().route("/", get(|| async { "Hello" }));
+    sqlx::migrate!().run(&pool).await?;
 
-    let listener = match TcpListener::bind("0.0.0.0:3000").await {
-        Ok(ok) => ok,
-        Err(err) => {
-            tracing::error!(error = %err, "Failed to bind TCP listener");
-            return;
-        }
-    };
+    let router = Router::new()
+        .nest("/api/v1/platform", platform::handler::router())
+        .layer(TraceLayer::new_for_http());
 
-    if let Err(err) = axum::serve(listener, router).await {
-        tracing::error!(error = %err, "Server failed");
-        return;
-    }
+    let listener = TcpListener::bind("0.0.0.0:3000").await?;
+    axum::serve(listener, router).await?;
+
+    Ok(())
 }
