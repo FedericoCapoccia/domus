@@ -1,3 +1,4 @@
+mod error;
 mod platform;
 
 use axum::Router;
@@ -6,6 +7,16 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+#[derive(Clone)]
+struct AppState {
+    pool: PgPool,
+}
+
+// TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
+// TODO: ensure that the plaform owner exists (platform_user with owner role). if not create it from env
+//
+// NOTE: rn the default user is federico@example.com with pwd: 'pallepalle'
+//       $argon2i$v=19$m=16,t=2,p=1$dGt6MzFUYmc1U2hSWHRDbg$3Xn4v6reW1CPud/RaLYu1w
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -17,20 +28,23 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let opts = PgConnectOptions::new()
-        .host("localhost")
+        .host(&std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost")))
         .port(5432)
         .username(&std::env::var("POSTGRES_USER")?)
         .password(&std::env::var("POSTGRES_PASSWORD")?)
         .database(&std::env::var("POSTGRES_DB")?)
         .log_statements(tracing::log::LevelFilter::Trace);
 
-    let pool = PgPool::connect_with(opts).await?;
+    let state = AppState {
+        pool: PgPool::connect_with(opts).await?,
+    };
 
-    sqlx::migrate!().run(&pool).await?;
+    sqlx::migrate!().run(&state.pool).await?;
 
     let router = Router::new()
         .nest("/api/v1/platform", platform::handler::router())
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     let listener = TcpListener::bind("0.0.0.0:3000").await?;
     axum::serve(listener, router).await?;

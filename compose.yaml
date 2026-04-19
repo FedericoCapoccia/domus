@@ -4,10 +4,26 @@ services:
     container_name: domus-pg
     restart: unless-stopped
     env_file: ".env"
-    ports:
+    ports: # Remove in prod
       - "5432:5432"
     volumes:
       - domus-pgdata:/var/lib/postgresql/data
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  app:
+    build: .
+    container_name: domus-app
+    restart: unless-stopped
+    env_file: ".env"
+    environment:
+      POSTGRES_HOST: postgres
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   domus-pgdata:

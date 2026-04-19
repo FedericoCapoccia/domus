@@ -1,4 +1,8 @@
 RUST_LOG="info"
+POSTGRES_HOST="localhost"
 POSTGRES_USER=""
 POSTGRES_PASSWORD=""
 POSTGRES_DB=""
+
+# For sqlx-cli
+DATABASE_URL="postgresql://user:pwd@host:port/db"

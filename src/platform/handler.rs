@@ -1,9 +1,23 @@
-use axum::{Router, routing::post};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
+use validator::Validate;
+// use validator::Validate;
 
-pub fn router() -> Router {
+use crate::{
+    AppState,
+    error::ProblemDetails,
+    platform::{service, types::LoginRequest},
+};
+
+pub fn router() -> Router<AppState> {
     Router::new().route("/login", post(login))
 }
 
-async fn login() -> &'static str {
-    "Hello"
+async fn login(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> Result<impl IntoResponse, ProblemDetails> {
+    req.validate()?;
+
+    let jwt = service::login(state.pool, req).await?;
+    Ok((StatusCode::OK, jwt))
 }
