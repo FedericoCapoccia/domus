@@ -11,7 +11,7 @@ pub async fn login(pool: PgPool, req: LoginRequest) -> Result<String, LoginError
     let user = sqlx::query_as!(
         User, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
         r#"SELECT id, email, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
-        req.email
+        req.email.trim().to_lowercase()
     )
     .fetch_optional(&pool)
     .await
@@ -37,7 +37,7 @@ pub async fn ensure_owner(pool: PgPool) -> Result<(), anyhow::Error> {
             .unwrap_or(false);
 
     if exists {
-        tracing::info!("Platform owner exists, skipping boostrap");
+        tracing::info!("Platform owner exists, skipping bootstrap");
         return Ok(());
     }
 
@@ -45,6 +45,12 @@ pub async fn ensure_owner(pool: PgPool) -> Result<(), anyhow::Error> {
         .map_err(|_| anyhow::anyhow!("Bootstrap failed, PLATFORM_OWNER_EMAIL not set"))?;
     let password = std::env::var("PLATFORM_OWNER_PASSWORD")
         .map_err(|_| anyhow::anyhow!("Bootstrap failed, PLATFORM_OWNER_PASSWORD not set"))?;
+
+    if email.trim().is_empty() || password.is_empty() {
+        return Err(anyhow!(
+            "Bootstrap failed, PLATFORM_OWNER_EMAIL and PLATFORM_OWNER_PASSWORD must not be empty"
+        ));
+    }
 
     tracing::info!("No platform owner found, creating from environment");
 
@@ -56,12 +62,12 @@ pub async fn ensure_owner(pool: PgPool) -> Result<(), anyhow::Error> {
 
     sqlx::query!(
         "INSERT INTO platform_user (email, password_hash, role) VALUES ($1, $2, 'owner')",
-        email,
+        email.trim().to_lowercase(),
         password_hash,
     )
     .execute(&pool)
     .await
-    .map_err(|err| anyhow!("DB error: {err}"))?;
+    .map_err(|err| anyhow!("Failed to create platform owner: {err}"))?;
 
     tracing::info!("Created platform owner: {email}");
     Ok(())
