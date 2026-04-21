@@ -1,5 +1,4 @@
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
-use validator::Validate;
 
 use crate::{
     AppState,
@@ -15,8 +14,6 @@ async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    req.validate()?;
-
     let jwt = service::login(state.pool, req).await?;
     Ok((StatusCode::OK, jwt))
 }

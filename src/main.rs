@@ -18,7 +18,7 @@ struct AppState {
 // NOTE: rn the default user is federico@example.com with pwd: 'pallepalle'
 //       $argon2i$v=19$m=16,t=2,p=1$dGt6MzFUYmc1U2hSWHRDbg$3Xn4v6reW1CPud/RaLYu1w
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     dotenvy::dotenv().ok();
     tracing_subscriber::registry()
         .with(
@@ -27,6 +27,13 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().with_target(false))
         .init();
 
+    if let Err(e) = run().await {
+        tracing::error!("Application error: {e:#}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     let opts = PgConnectOptions::new()
         .host(&std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost")))
         .port(5432)
@@ -40,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
+    platform::ensure_owner(state.pool.clone()).await?;
 
     let router = Router::new()
         .nest("/api/v1/platform", platform::handler::router())

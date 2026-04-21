@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
 
 use crate::error::ProblemDetails;
 
@@ -10,12 +9,9 @@ use crate::error::ProblemDetails;
 // Request DTO
 //=====================================================================================================================
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize)]
 pub struct LoginRequest {
-    #[validate(email)]
     pub email: String,
-
-    #[validate(length(min = 8))]
     pub password: String,
 }
 
@@ -27,11 +23,20 @@ pub struct LoginRequest {
 // Model DTO
 //=====================================================================================================================
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type)]
+#[sqlx(type_name = "platform_user_role", rename_all = "lowercase")]
+pub enum PlatformRole {
+    Owner,
+    Admin,
+    User,
+}
+
 #[derive(sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub email: String,
     pub password_hash: String,
+    pub role: PlatformRole,
 }
 
 //=====================================================================================================================
