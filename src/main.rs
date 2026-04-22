@@ -13,10 +13,7 @@ struct AppState {
 }
 
 // TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
-// TODO: ensure that the plaform owner exists (platform_user with owner role). if not create it from env
-//
-// NOTE: rn the default user is federico@example.com with pwd: 'pallepalle'
-//       $argon2i$v=19$m=16,t=2,p=1$dGt6MzFUYmc1U2hSWHRDbg$3Xn4v6reW1CPud/RaLYu1w
+// TODO: add artificial delay to login if user does not exists
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
