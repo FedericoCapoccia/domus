@@ -14,7 +14,6 @@ struct AppState {
 
 // TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
 // TODO: add some sort of testing (in-memory db pool?)
-// TODO: right now ensure_owner can fail because of race conditions (with 2 instances at the same time on 1 db)
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -45,6 +44,7 @@ async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
+
     platform::ensure_owner(&state.pool).await?;
 
     let router = Router::new()

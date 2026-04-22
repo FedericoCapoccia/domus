@@ -78,14 +78,7 @@ pub async fn register_user(
 }
 
 pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
-    let exists =
-        sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM platform_user WHERE role = 'owner')")
-            .fetch_one(pool)
-            .await
-            .map_err(|err| anyhow::anyhow!("DB error: {err}"))?
-            .unwrap_or(false);
-
-    if exists {
+    if owner_exists(pool).await? {
         tracing::info!("Platform owner exists, skipping bootstrap");
         return Ok(());
     }
@@ -102,12 +95,33 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
     }
 
     tracing::info!("No platform owner found, creating from environment");
-    if let Err(error) = register_user(pool, &email, &password, PlatformRole::Owner).await {
-        return Err(anyhow::anyhow!("Failed to create owner: {error}"));
-    };
 
-    tracing::info!("Created platform owner: {email}");
-    Ok(())
+    match register_user(pool, &email, &password, PlatformRole::Owner).await {
+        Ok(_) => {
+            tracing::info!("Created platform owner: {email}");
+            Ok(())
+        }
+        Err(UserCreateError::OwnerExists(_) | UserCreateError::EmailExists(_)) => {
+            // This is more of a safeguard
+            if owner_exists(pool).await? {
+                tracing::warn!("Platform owner was created concurrently, continuing startup");
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Failed to create owner"))
+            }
+        }
+        Err(error) => Err(anyhow::anyhow!("Failed to create owner: {error}")),
+    }
+}
+
+async fn owner_exists(pool: &PgPool) -> Result<bool, anyhow::Error> {
+    let res =
+        sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM platform_user WHERE role = 'owner')")
+            .fetch_one(pool)
+            .await
+            .map_err(|err| anyhow::anyhow!("DB error: {err}"))?
+            .unwrap_or(false);
+    Ok(res)
 }
 
 async fn hash_password(password: &str) -> Result<String, anyhow::Error> {

@@ -85,6 +85,7 @@ impl ProblemDetails {
     }
 }
 
+// TODO: Add 'WWW-Authenticate' header when 401
 impl IntoResponse for ProblemDetails {
     fn into_response(self) -> Response {
         let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -121,7 +122,9 @@ impl From<validator::ValidationErrors> for ProblemDetails {
 
 impl From<JsonRejection> for ProblemDetails {
     fn from(err: JsonRejection) -> Self {
-        match err {
+        let status = err.status();
+
+        match &err {
             JsonRejection::JsonDataError(_) => ProblemDetails::unprocessable_entity(
                 "Request body has missing or invalid fields".into(),
                 None,
@@ -133,19 +136,16 @@ impl From<JsonRejection> for ProblemDetails {
                 "Expected 'Content-Type: application/json'".into(),
             ),
             JsonRejection::BytesRejection(_) => {
-                let status = err.status();
                 let detail = if status == StatusCode::PAYLOAD_TOO_LARGE {
                     "Request body exceeds the maximum allowed size"
                 } else {
                     "Failed to read request body"
                 };
+
                 ProblemDetails::new(
                     status,
-                    status
-                        .canonical_reason()
-                        .unwrap_or("Request Error")
-                        .to_string(),
-                    detail.to_string(),
+                    status.canonical_reason().unwrap_or("Request Error").into(),
+                    detail.into(),
                     None,
                 )
             }
