@@ -21,9 +21,9 @@ pub fn router() -> Router<AppState> {
         .route("/logout", post(async || {}))
         .route("/users", get(async || {}))
         .route("/users", post(async || {}))
-        .route("/users/:id", get(async || {}))
-        .route("/users/:id", delete(async || {}))
-        .route("/users/:id/role", post(async || {}))
+        .route("/users/id", get(async || {}))
+        .route("/users/id", delete(async || {}))
+        .route("/users/id/role", post(async || {}))
         .route("/me", get(async || {}))
         .route("/me", patch(async || {}))
 }
