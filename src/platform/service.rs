@@ -66,7 +66,7 @@ pub async fn register_user(
                 Err(UserCreateError::Database(sqlx::Error::Database(db_err)))
             }
         }
-        Err(_) => unreachable!(),
+        Err(err) => Err(UserCreateError::Database(err)),
     }
 }
 
