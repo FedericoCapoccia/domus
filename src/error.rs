@@ -1,5 +1,6 @@
 use axum::{
     body::Body,
+    extract::rejection::JsonRejection,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -31,7 +32,7 @@ impl ProblemDetails {
         errors: Option<Vec<FieldError>>,
     ) -> Self {
         Self {
-            type_: String::from("about:blank"),
+            type_: "about:blank".into(),
             title,
             status: status.as_u16(),
             detail,
@@ -42,7 +43,7 @@ impl ProblemDetails {
     pub fn unauthorized(detail: String) -> Self {
         Self::new(
             StatusCode::UNAUTHORIZED,
-            String::from("Unauthorized"),
+            "Unauthorized".into(),
             detail,
             None,
         )
@@ -51,23 +52,36 @@ impl ProblemDetails {
     pub fn internal_error() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
-            String::from("Internal Server Error"),
+            "Internal Server Error".into(),
             String::from("An unexpected error occurred"),
             None,
         )
     }
 
-    pub fn unprocessable_entity(detail: String, errors: Vec<FieldError>) -> Self {
+    pub fn unprocessable_entity(detail: String, errors: Option<Vec<FieldError>>) -> Self {
         Self::new(
             StatusCode::UNPROCESSABLE_ENTITY,
-            String::from("Unprocessable Entity"),
+            "Unprocessable Entity".into(),
             detail,
-            Some(errors),
+            errors,
         )
     }
 
     pub fn conflict(detail: String) -> Self {
-        Self::new(StatusCode::CONFLICT, String::from("Conflict"), detail, None)
+        Self::new(StatusCode::CONFLICT, "Conflict".into(), detail, None)
+    }
+
+    pub fn bad_request(detail: String) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, "Bad Request".into(), detail, None)
+    }
+
+    pub fn unsupported_media_type(detail: String) -> Self {
+        Self::new(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "Unsupported Media Type".into(),
+            detail,
+            None,
+        )
     }
 }
 
@@ -101,6 +115,41 @@ impl From<validator::ValidationErrors> for ProblemDetails {
                 })
             })
             .collect();
-        ProblemDetails::unprocessable_entity(String::from("Validation failed"), errors)
+        ProblemDetails::unprocessable_entity("Validation failed".into(), Some(errors))
+    }
+}
+
+impl From<JsonRejection> for ProblemDetails {
+    fn from(err: JsonRejection) -> Self {
+        match err {
+            JsonRejection::JsonDataError(_) => ProblemDetails::unprocessable_entity(
+                "Request body has missing or invalid fields".into(),
+                None,
+            ),
+            JsonRejection::JsonSyntaxError(_) => {
+                ProblemDetails::bad_request("Malformed JSON body".into())
+            }
+            JsonRejection::MissingJsonContentType(_) => ProblemDetails::unsupported_media_type(
+                "Expected 'Content-Type: application/json'".into(),
+            ),
+            JsonRejection::BytesRejection(_) => {
+                let status = err.status();
+                let detail = if status == StatusCode::PAYLOAD_TOO_LARGE {
+                    "Request body exceeds the maximum allowed size"
+                } else {
+                    "Failed to read request body"
+                };
+                ProblemDetails::new(
+                    status,
+                    status
+                        .canonical_reason()
+                        .unwrap_or("Request Error")
+                        .to_string(),
+                    detail.to_string(),
+                    None,
+                )
+            }
+            _ => ProblemDetails::bad_request("Failed to parse JSON body".into()),
+        }
     }
 }

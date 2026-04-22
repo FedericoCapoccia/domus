@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{State, rejection::JsonRejection},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -30,8 +30,9 @@ pub fn router() -> Router<AppState> {
 
 async fn login(
     State(state): State<AppState>,
-    Json(req): Json<LoginRequest>,
+    payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
+    let Json(req) = payload.map_err(ProblemDetails::from)?;
     let jwt = service::login(&state.pool, &req.email, &req.password).await?;
     Ok((StatusCode::OK, jwt))
 }
