@@ -77,7 +77,7 @@ impl From<LoginError> for ProblemDetails {
     fn from(err: LoginError) -> Self {
         match err {
             LoginError::UserNotFound(_) | LoginError::PasswordMismatch(_) => {
-                ProblemDetails::unauthorized(String::from("Invalid credentials"))
+                ProblemDetails::unauthorized("Invalid credentials".into())
             }
             LoginError::Other(_) | LoginError::Database(_) => ProblemDetails::internal_error(),
         }
@@ -107,7 +107,7 @@ impl From<UserCreateError> for ProblemDetails {
     fn from(err: UserCreateError) -> Self {
         match err {
             UserCreateError::EmailExists(_) => {
-                ProblemDetails::conflict(String::from("Email already exists"))
+                ProblemDetails::conflict("Email already exists".into())
             }
             // I want to return 500 on OwnerExists to safeguard owner's email if this gets leaked
             // into an handler somehow

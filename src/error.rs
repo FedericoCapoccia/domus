@@ -53,7 +53,7 @@ impl ProblemDetails {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Internal Server Error".into(),
-            String::from("An unexpected error occurred"),
+            "An unexpected error occurred".into(),
             None,
         )
     }

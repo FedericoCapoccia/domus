@@ -66,9 +66,9 @@ pub async fn register_user(
         Ok(user) => Ok(user),
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.constraint() == Some("platform_user_email_unique") {
-                Err(UserCreateError::EmailExists(email.to_string()))
+                Err(UserCreateError::EmailExists(email))
             } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
-                Err(UserCreateError::OwnerExists(email.to_string()))
+                Err(UserCreateError::OwnerExists(email))
             } else {
                 Err(UserCreateError::Database(sqlx::Error::Database(db_err)))
             }

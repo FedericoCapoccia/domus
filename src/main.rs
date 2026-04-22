@@ -33,8 +33,8 @@ async fn main() {
 
 async fn run() -> anyhow::Result<()> {
     let opts = PgConnectOptions::new()
-        .host(&std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost")))
-        .port(5432)
+        .host(&std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into()))
+        .port(5432) // TODO: add env
         .username(&std::env::var("POSTGRES_USER")?)
         .password(&std::env::var("POSTGRES_PASSWORD")?)
         .database(&std::env::var("POSTGRES_DB")?)
