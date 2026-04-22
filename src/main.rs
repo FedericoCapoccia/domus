@@ -44,7 +44,7 @@ async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
-    platform::ensure_owner(state.pool.clone()).await?;
+    platform::ensure_owner(&state.pool.clone()).await?;
 
     let router = Router::new()
         .nest("/api/v1/platform", platform::handler::router())

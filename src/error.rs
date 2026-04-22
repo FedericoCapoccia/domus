@@ -24,13 +24,18 @@ pub struct ProblemDetails {
 }
 
 impl ProblemDetails {
-    pub fn new(status: StatusCode, title: String, detail: String) -> Self {
+    pub fn new(
+        status: StatusCode,
+        title: String,
+        detail: String,
+        errors: Option<Vec<FieldError>>,
+    ) -> Self {
         Self {
             type_: String::from("about:blank"),
             title,
             status: status.as_u16(),
             detail,
-            errors: None,
+            errors,
         }
     }
 
@@ -39,25 +44,30 @@ impl ProblemDetails {
             StatusCode::UNAUTHORIZED,
             String::from("Unauthorized"),
             detail,
+            None,
         )
     }
 
-    pub fn internal_error(detail: String) -> Self {
+    pub fn internal_error() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             String::from("Internal Server Error"),
-            detail,
+            String::from("An unexpected error occurred"),
+            None,
         )
     }
 
     pub fn unprocessable_entity(detail: String, errors: Vec<FieldError>) -> Self {
-        Self {
-            type_: String::from("about:blank"),
-            title: String::from("Unprocessable Entity"),
-            status: StatusCode::UNPROCESSABLE_ENTITY.as_u16(),
+        Self::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            String::from("Unprocessable Entity"),
             detail,
-            errors: Some(errors),
-        }
+            Some(errors),
+        )
+    }
+
+    pub fn conflict(detail: String) -> Self {
+        Self::new(StatusCode::CONFLICT, String::from("Conflict"), detail, None)
     }
 }
 
