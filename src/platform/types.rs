@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::error::ProblemDetails;
@@ -24,7 +24,7 @@ pub struct LoginRequest {
 // Model DTO
 //=====================================================================================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type, Deserialize)]
 #[sqlx(type_name = "platform_user_role", rename_all = "lowercase")]
 pub enum PlatformRole {
     Owner,
@@ -45,7 +45,7 @@ pub struct UserCreatedResponse {
     pub id: Uuid,
     pub email: String,
     pub role: PlatformRole,
-    pub created_at: DateTime<Utc>,
+    pub created_at: OffsetDateTime,
 }
 
 //=====================================================================================================================
@@ -55,22 +55,20 @@ pub struct UserCreatedResponse {
 #[derive(Debug)]
 pub enum LoginError {
     UserNotFound(String),
-    PasswordParsing,
     PasswordMismatch(argon2::password_hash::Error),
     Database(sqlx::Error),
+    Other(String),
 }
 
 impl Display for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LoginError::UserNotFound(email) => write!(f, "User '{email}' not found"),
-            LoginError::PasswordParsing => {
-                write!(f, "Failed to parse password from db")
-            }
             LoginError::PasswordMismatch(error) => {
                 write!(f, "Password does not match. err: {error}")
             }
             LoginError::Database(error) => write!(f, "Query error: {error}"),
+            LoginError::Other(message) => write!(f, "{message}"),
         }
     }
 }
@@ -81,9 +79,7 @@ impl From<LoginError> for ProblemDetails {
             LoginError::UserNotFound(_) | LoginError::PasswordMismatch(_) => {
                 ProblemDetails::unauthorized(String::from("Invalid credentials"))
             }
-            LoginError::PasswordParsing | LoginError::Database(_) => {
-                ProblemDetails::internal_error()
-            }
+            LoginError::Other(_) | LoginError::Database(_) => ProblemDetails::internal_error(),
         }
     }
 }
@@ -92,7 +88,7 @@ impl From<LoginError> for ProblemDetails {
 pub enum UserCreateError {
     EmailExists(String),
     OwnerExists(String),
-    PasswordHashing(argon2::password_hash::Error),
+    PasswordHashing(anyhow::Error),
     Database(sqlx::Error),
 }
 

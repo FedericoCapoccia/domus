@@ -78,7 +78,9 @@ impl IntoResponse for ProblemDetails {
         Response::builder()
             .status(status)
             .header(header::CONTENT_TYPE, "application/problem+json")
-            .body(Body::from(serde_json::to_string(&self).unwrap_or_default()))
+            .body(Body::from(
+                serde_json::to_string(&self).expect("ProblemDetails is serializable"),
+            ))
             .unwrap()
     }
 }

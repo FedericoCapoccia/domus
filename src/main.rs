@@ -1,7 +1,7 @@
 mod error;
 mod platform;
 
-use axum::Router;
+use axum::{Router, extract::DefaultBodyLimit};
 use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -13,7 +13,6 @@ struct AppState {
 }
 
 // TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
-// TODO: add artificial delay to login if user does not exists
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -44,10 +43,11 @@ async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
-    platform::ensure_owner(&state.pool.clone()).await?;
+    platform::ensure_owner(&state.pool).await?;
 
     let router = Router::new()
         .nest("/api/v1/platform", platform::handler::router())
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

@@ -9,23 +9,30 @@ use crate::platform::types::{
 };
 
 pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String, LoginError> {
+    let email = email.trim().to_lowercase();
+
     let user = sqlx::query_as!(
         UserLoginInfo, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
         r#"SELECT id, email, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
-        email.trim().to_lowercase()
+        email
     )
     .fetch_optional(pool)
     .await
-    .map_err(LoginError::Database)?
-    .ok_or(LoginError::UserNotFound(email.to_string()))?;
+    .map_err(LoginError::Database)?;
 
-    let pwd_hash =
-        PasswordHash::new(&user.password_hash).map_err(|_| LoginError::PasswordParsing)?;
+    let user = match user {
+        Some(user) => user,
+        None => {
+            let _ = verify_password(
+                password,
+                "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
+            )
+            .await;
+            return Err(LoginError::UserNotFound(email));
+        }
+    };
 
-    Argon2::default()
-        .verify_password(password.as_bytes(), &pwd_hash)
-        .map_err(LoginError::PasswordMismatch)?;
-
+    verify_password(password, &user.password_hash).await?;
     Ok("MockJWT".to_string())
 }
 
@@ -35,11 +42,11 @@ pub async fn register_user(
     password: &str,
     role: PlatformRole,
 ) -> Result<UserCreatedResponse, UserCreateError> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(UserCreateError::PasswordHashing)?
-        .to_string();
+    let email = email.trim().to_lowercase();
+
+    let hash = hash_password(password)
+        .await
+        .map_err(UserCreateError::PasswordHashing)?;
 
     let result = sqlx::query_as!(
         UserCreatedResponse,
@@ -48,7 +55,7 @@ pub async fn register_user(
         VALUES ($1, $2, $3)
         RETURNING id, email, role as "role: _", created_at
         "#,
-        email.trim().to_lowercase(),
+        email,
         hash,
         role as PlatformRole,
     )
@@ -101,4 +108,32 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
 
     tracing::info!("Created platform owner: {email}");
     Ok(())
+}
+
+async fn hash_password(password: &str) -> Result<String, anyhow::Error> {
+    let password = password.to_string();
+
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map(|h| h.to_string())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Password hashing task panicked: {e}"))?
+    .map_err(|e| anyhow::anyhow!("Argon2 error: {e}"))
+}
+
+async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginError> {
+    let password = password.to_string();
+    let stored_hash = stored_hash.to_string();
+
+    tokio::task::spawn_blocking(move || {
+        let hash = PasswordHash::new(&stored_hash).map_err(|e| LoginError::Other(e.to_string()))?;
+        Argon2::default()
+            .verify_password(password.as_bytes(), &hash)
+            .map_err(LoginError::PasswordMismatch)
+    })
+    .await
+    .map_err(|e| LoginError::Other(e.to_string()))?
 }
