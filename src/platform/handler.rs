@@ -11,6 +11,7 @@ use crate::{
     },
 };
 
+// TODO: add some logging to the handlers
 // NOTE:
 // - DELETE /users/:id -> owner can delete all but himself, admin can delete role='user'
 // - POST /users/:id/role -> owner can modify roles

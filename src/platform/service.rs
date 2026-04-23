@@ -141,8 +141,8 @@ async fn hash_password(password: &str) -> Result<String, UserCreateError> {
             .map(|h| h.to_string())
     })
     .await
-    .map_err(|_| UserCreateError::PasswordHashing)?
-    .map_err(|_| UserCreateError::PasswordHashing)
+    .map_err(|e| UserCreateError::PasswordHashing(format!("Task panic: {e}")))?
+    .map_err(|e| UserCreateError::PasswordHashing(format!("Argon2: {e}")))
 }
 
 async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginError> {
@@ -150,11 +150,12 @@ async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginE
     let stored_hash = stored_hash.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let hash = PasswordHash::new(&stored_hash).map_err(|_| LoginError::PasswordParse)?;
+        let hash = PasswordHash::new(&stored_hash)
+            .map_err(|e| LoginError::PasswordParse(format!("Argon2: {e}")))?;
         Argon2::default()
             .verify_password(password.as_bytes(), &hash)
             .map_err(|_| LoginError::PasswordMismatch)
     })
     .await
-    .map_err(|_| LoginError::PasswordParse)?
+    .map_err(|e| LoginError::PasswordParse(format!("Task panic: {e}")))?
 }

@@ -6,8 +6,8 @@ pub enum LoginError {
     UserNotFound(String /* email */),
     #[error("Password does not match")]
     PasswordMismatch,
-    #[error("Invalid password hash format")]
-    PasswordParse,
+    #[error("Couldn't parse the password hash")]
+    PasswordParse(String),
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 }
@@ -15,7 +15,7 @@ pub enum LoginError {
 impl From<LoginError> for ProblemDetails {
     fn from(err: LoginError) -> Self {
         match err {
-            LoginError::Database(_) | LoginError::PasswordParse => ProblemDetails::internal_error(),
+            LoginError::Database(_) | LoginError::PasswordParse(_) => ProblemDetails::internal_error(),
             LoginError::UserNotFound(_) | LoginError::PasswordMismatch => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
@@ -30,7 +30,7 @@ pub enum UserCreateError {
     #[error("Owner already exists")]
     OwnerExists(String /* email */),
     #[error("Failed to hash password")]
-    PasswordHashing,
+    PasswordHashing(String),
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 }
@@ -43,7 +43,7 @@ impl From<UserCreateError> for ProblemDetails {
             }
             // I want to return 500 on OwnerExists to safeguard owner's email if this gets leaked
             // into an handler somehow
-            UserCreateError::PasswordHashing
+            UserCreateError::PasswordHashing(_)
             | UserCreateError::Database(_)
             | UserCreateError::OwnerExists(_) => ProblemDetails::internal_error(),
         }
