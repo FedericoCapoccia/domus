@@ -1,5 +1,6 @@
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::platform::PlatformRole;
 
@@ -27,7 +28,7 @@ pub enum ClaimData {
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,
+    pub sub: Uuid,
     pub iss: String,
     pub iat: i64,
     pub nbf: i64,
@@ -37,7 +38,7 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn platform(sub: String, role: PlatformRole, minutes: i64) -> Self {
+    pub fn platform(sub: Uuid, role: PlatformRole, minutes: i64) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         Self {
             sub,
@@ -48,7 +49,7 @@ impl Claims {
             data: ClaimData::Platform { role },
         }
     }
-    pub fn _tenant(sub: String, tenant_slug: String, minutes: i64) -> Self {
+    pub fn _tenant(sub: Uuid, tenant_slug: String, minutes: i64) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         Self {
             sub,

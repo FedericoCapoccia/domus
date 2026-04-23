@@ -33,7 +33,7 @@ async fn login(
 ) -> Result<impl IntoResponse, ProblemDetails> {
     let user = service::login(&state.pool, &req.email, &req.password).await?;
 
-    let claims = Claims::platform(user.id.to_string(), user.role, 15);
+    let claims = Claims::platform(user.id, user.role, 15);
     let jwt = jwt::generate(&claims, &state.encoding_key)
         .map_err(|_| ProblemDetails::internal_error())?;
 
