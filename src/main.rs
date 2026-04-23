@@ -2,7 +2,7 @@ mod error;
 mod platform;
 
 use axum::{Router, extract::DefaultBodyLimit};
-use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
+use sqlx::{PgPool, postgres::PgConnectOptions};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
