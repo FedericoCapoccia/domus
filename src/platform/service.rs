@@ -109,7 +109,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
 
     match register_user(pool, &email, &password, PlatformRole::Owner).await {
         Ok(_) => {
-            tracing::info!("Created platform owner: {email}");
+            tracing::info!("Created platform owner");
             Ok(())
         }
         Err(UserCreateError::OwnerExists(_) | UserCreateError::EmailExists(_)) => {
