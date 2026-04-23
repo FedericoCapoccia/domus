@@ -1,15 +1,15 @@
 use axum::{
     Json, Router,
-    extract::{State, rejection::JsonRejection},
+    extract::State,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
 };
-use validator::Validate;
 
 use crate::{
     AppState,
     error::ProblemDetails,
+    extractor::ValidatedJson,
     platform::{
         dto::{LoginRequest, UserCreateRequest},
         service,
@@ -34,20 +34,16 @@ pub fn router() -> Router<AppState> {
 
 async fn login(
     State(state): State<AppState>,
-    payload: Result<Json<LoginRequest>, JsonRejection>,
+    ValidatedJson(req): ValidatedJson<LoginRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    let Json(req) = payload.map_err(ProblemDetails::from)?;
     let jwt = service::login(&state.pool, &req.email, &req.password).await?;
     Ok((StatusCode::OK, jwt))
 }
 
 async fn register(
     State(state): State<AppState>,
-    payload: Result<Json<UserCreateRequest>, JsonRejection>,
+    ValidatedJson(req): ValidatedJson<UserCreateRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    let Json(req) = payload.map_err(ProblemDetails::from)?;
-    req.validate().map_err(ProblemDetails::from)?;
-
     let created = service::register_user(
         &state.pool,
         &req.email,

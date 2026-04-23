@@ -20,8 +20,6 @@ pub struct UserLoginInfo {
 }
 
 pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String, LoginError> {
-    let email = email.trim().to_lowercase();
-
     let user = sqlx::query_as!(
         UserLoginInfo, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
         r#"SELECT id, email, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
@@ -39,7 +37,7 @@ pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String,
                 "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
             )
             .await;
-            return Err(LoginError::UserNotFound(email));
+            return Err(LoginError::UserNotFound(email.into()));
         }
     };
 
@@ -53,8 +51,6 @@ pub async fn register_user(
     password: &str,
     role: PlatformRole,
 ) -> Result<UserCreatedResponse, UserCreateError> {
-    let email = email.trim().to_lowercase();
-
     let hash = hash_password(password)
         .await
         .map_err(UserCreateError::PasswordHashing)?;
@@ -77,9 +73,9 @@ pub async fn register_user(
         Ok(user) => Ok(user),
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.constraint() == Some("platform_user_email_unique") {
-                Err(UserCreateError::EmailExists(email))
+                Err(UserCreateError::EmailExists(email.into()))
             } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
-                Err(UserCreateError::OwnerExists(email))
+                Err(UserCreateError::OwnerExists(email.into()))
             } else {
                 Err(UserCreateError::Database(sqlx::Error::Database(db_err)))
             }
@@ -107,6 +103,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
 
     tracing::info!("No platform owner found, creating from environment");
 
+    let email = email.trim().to_lowercase();
     match register_user(pool, &email, &password, PlatformRole::Owner).await {
         Ok(_) => {
             tracing::info!("Created platform owner");

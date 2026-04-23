@@ -3,10 +3,12 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::platform::domain::PlatformRole;
+use crate::{platform::domain::PlatformRole, util::serde::deserialize_normalized_email};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
 pub struct LoginRequest {
+    #[serde(deserialize_with = "deserialize_normalized_email")]
     pub email: String,
     pub password: String,
 }
@@ -14,6 +16,7 @@ pub struct LoginRequest {
 #[derive(Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct UserCreateRequest {
+    #[serde(deserialize_with = "deserialize_normalized_email")]
     #[validate(email, length(max = 254))]
     pub email: String,
     #[validate(length(min = 8, max = 128))]
