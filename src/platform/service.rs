@@ -19,7 +19,11 @@ pub struct UserLoginInfo {
     pub role: PlatformRole,
 }
 
-pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String, LoginError> {
+pub async fn login(
+    pool: &PgPool,
+    email: &str,
+    password: &str,
+) -> Result<UserLoginInfo, LoginError> {
     let user = sqlx::query_as!(
         UserLoginInfo, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
         r#"SELECT id, email, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
@@ -42,7 +46,7 @@ pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String,
     };
 
     verify_password(password, &user.password_hash).await?;
-    Ok("MockJWT".into())
+    Ok(user)
 }
 
 pub async fn register_user(

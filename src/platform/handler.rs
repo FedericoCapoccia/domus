@@ -10,6 +10,7 @@ use crate::{
     AppState,
     error::ProblemDetails,
     extractor::ValidatedJson,
+    jwt,
     platform::{
         dto::{LoginRequest, UserCreateRequest},
         service,
@@ -36,8 +37,10 @@ async fn login(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<LoginRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    let jwt = service::login(&state.pool, &req.email, &req.password).await?;
-    Ok((StatusCode::OK, jwt))
+    let user = service::login(&state.pool, &req.email, &req.password).await?;
+    let token = jwt::generate(user.id, &user.email, user.role, &state.encoding_key, 15)
+        .map_err(|_| ProblemDetails::internal_error())?;
+    Ok((StatusCode::OK, Json(token)))
 }
 
 async fn register(
