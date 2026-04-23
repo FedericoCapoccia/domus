@@ -40,7 +40,7 @@ pub async fn login(
                 "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
             )
             .await;
-            return Err(LoginError::UserNotFound(email.into()));
+            return Err(LoginError::UserNotFound);
         }
     };
 
@@ -163,7 +163,7 @@ async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginE
         let hash = PasswordHash::new(&stored_hash).map_err(|e| LoginError::Other(e.to_string()))?;
         Argon2::default()
             .verify_password(password.as_bytes(), &hash)
-            .map_err(LoginError::PasswordMismatch)
+            .map_err(|_| LoginError::PasswordMismatch)
     })
     .await
     .map_err(|e| LoginError::Other(e.to_string()))?

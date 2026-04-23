@@ -4,8 +4,8 @@ use crate::error::ProblemDetails;
 
 #[derive(Debug)]
 pub enum LoginError {
-    UserNotFound(String),
-    PasswordMismatch(argon2::password_hash::Error),
+    UserNotFound,
+    PasswordMismatch,
     Database(sqlx::Error),
     Other(String),
 }
@@ -13,9 +13,9 @@ pub enum LoginError {
 impl Display for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoginError::UserNotFound(email) => write!(f, "User '{email}' not found"),
-            LoginError::PasswordMismatch(error) => {
-                write!(f, "Password does not match. err: {error}")
+            LoginError::UserNotFound => write!(f, "User not found"),
+            LoginError::PasswordMismatch => {
+                write!(f, "Password does not match")
             }
             LoginError::Database(error) => write!(f, "Query error: {error}"),
             LoginError::Other(message) => write!(f, "{message}"),
@@ -26,7 +26,7 @@ impl Display for LoginError {
 impl From<LoginError> for ProblemDetails {
     fn from(err: LoginError) -> Self {
         match err {
-            LoginError::UserNotFound(_) | LoginError::PasswordMismatch(_) => {
+            LoginError::UserNotFound | LoginError::PasswordMismatch => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
             LoginError::Other(_) | LoginError::Database(_) => ProblemDetails::internal_error(),
