@@ -1,56 +1,6 @@
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
-use uuid::Uuid;
-
 use crate::error::ProblemDetails;
-
-//=====================================================================================================================
-// Request DTO
-//=====================================================================================================================
-
-#[derive(Deserialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
-
-//=====================================================================================================================
-// Response DTO
-//=====================================================================================================================
-
-//=====================================================================================================================
-// Model DTO
-//=====================================================================================================================
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type, Deserialize)]
-#[sqlx(type_name = "platform_user_role", rename_all = "lowercase")]
-pub enum PlatformRole {
-    Owner,
-    Admin,
-    User,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct UserLoginInfo {
-    pub id: Uuid,
-    pub email: String,
-    pub password_hash: String,
-    pub role: PlatformRole,
-}
-
-#[derive(Serialize)]
-pub struct UserCreatedResponse {
-    pub id: Uuid,
-    pub email: String,
-    pub role: PlatformRole,
-    pub created_at: OffsetDateTime,
-}
-
-//=====================================================================================================================
-// Errors
-//=====================================================================================================================
 
 #[derive(Debug)]
 pub enum LoginError {

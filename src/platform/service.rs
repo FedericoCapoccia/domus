@@ -3,10 +3,21 @@ use argon2::{
     password_hash::{SaltString, rand_core::OsRng},
 };
 use sqlx::PgPool;
+use uuid::Uuid;
 
-use crate::platform::types::{
-    LoginError, PlatformRole, UserCreateError, UserCreatedResponse, UserLoginInfo,
+use crate::platform::{
+    domain::PlatformRole,
+    dto::UserCreatedResponse,
+    types::{LoginError, UserCreateError},
 };
+
+#[derive(sqlx::FromRow)]
+pub struct UserLoginInfo {
+    pub id: Uuid,
+    pub email: String,
+    pub password_hash: String,
+    pub role: PlatformRole,
+}
 
 pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String, LoginError> {
     let email = email.trim().to_lowercase();
@@ -33,7 +44,7 @@ pub async fn login(pool: &PgPool, email: &str, password: &str) -> Result<String,
     };
 
     verify_password(password, &user.password_hash).await?;
-    Ok("MockJWT".to_string())
+    Ok("MockJWT".into())
 }
 
 pub async fn register_user(
