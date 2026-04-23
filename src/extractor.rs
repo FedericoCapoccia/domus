@@ -7,6 +7,7 @@ use validator::Validate;
 use crate::error::ProblemDetails;
 
 pub struct ValidatedJson<T>(pub T);
+
 impl<S, T> FromRequest<S> for ValidatedJson<T>
 where
     S: Send + Sync,
