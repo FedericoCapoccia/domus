@@ -1,18 +1,11 @@
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 
 use crate::{
     app::AppState,
-    auth::jwt,
+    auth::jwt::{self, Claims},
     error::ProblemDetails,
     extractors::validated_json::ValidatedJson,
     platform::{
-        claims::Claims,
         dto::{LoginRequest, UserCreateRequest},
         service,
     },
@@ -25,7 +18,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/login", post(login))
         // .route("/logout", post(async || {}))
-        .route("/users", get(async || {}))
+        // .route("/users", get(async || {}))
         .route("/users", post(register))
     // .route("/users/id", get(async || {}))
     // .route("/users/id", delete(async || {}))
@@ -40,7 +33,7 @@ async fn login(
 ) -> Result<impl IntoResponse, ProblemDetails> {
     let user = service::login(&state.pool, &req.email, &req.password).await?;
 
-    let claims = Claims::new(user.id.into(), 15, &user.email, user.role);
+    let claims = Claims::platform(user.id.to_string(), user.role, 15);
     let jwt = jwt::generate(&claims, &state.encoding_key)
         .map_err(|_| ProblemDetails::internal_error())?;
 

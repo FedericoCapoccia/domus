@@ -105,6 +105,12 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
         ));
     }
 
+    if password.len() < 8 || password.len() > 128 {
+        return Err(anyhow::anyhow!(
+            "Bootstrap failed, PLATFORM_OWNER_PASSWORD must be at least 8 characters and 128 at most"
+        ));
+    }
+
     tracing::info!("No platform owner found, creating from environment");
 
     let email = email.trim().to_lowercase();

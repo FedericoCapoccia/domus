@@ -9,7 +9,9 @@ use crate::{platform::domain::PlatformRole, util::serde::deserialize_normalized_
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
     #[serde(deserialize_with = "deserialize_normalized_email")]
+    #[validate(length(max = 254))]
     pub email: String,
+    #[validate(length(min = 8, max = 128))]
     pub password: String,
 }
 
