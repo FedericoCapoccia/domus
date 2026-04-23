@@ -13,7 +13,7 @@ async fn main() {
         .init();
 
     if let Err(e) = domus::run().await {
-        tracing::error!("Application error: {e:#}");
+        tracing::error!("Application error: {e}");
         std::process::exit(1);
     }
 }

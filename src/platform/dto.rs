@@ -28,7 +28,6 @@ pub struct UserCreateRequest {
 #[derive(Serialize)]
 pub struct UserCreatedResponse {
     pub id: Uuid,
-    pub email: String,
     pub role: PlatformRole,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,

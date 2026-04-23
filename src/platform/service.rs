@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::platform::{
     domain::PlatformRole,
     dto::UserCreatedResponse,
-    error::{LoginError, UserCreateError},
+    error::{BootstrapError, LoginError, UserCreateError},
 };
 
 #[derive(sqlx::FromRow)]
@@ -29,8 +29,7 @@ pub async fn login(
         email
     )
     .fetch_optional(pool)
-    .await
-    .map_err(LoginError::Database)?;
+    .await?;
 
     let user = match user {
         Some(user) => user,
@@ -40,7 +39,7 @@ pub async fn login(
                 "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
             )
             .await;
-            return Err(LoginError::UserNotFound);
+            return Err(LoginError::UserNotFound(email.into()));
         }
     };
 
@@ -54,16 +53,13 @@ pub async fn register_user(
     password: &str,
     role: PlatformRole,
 ) -> Result<UserCreatedResponse, UserCreateError> {
-    let hash = hash_password(password)
-        .await
-        .map_err(UserCreateError::PasswordHashing)?;
-
+    let hash = hash_password(password).await?;
     let result = sqlx::query_as!(
         UserCreatedResponse,
         r#"
         INSERT INTO platform_user (email, password_hash, role)
         VALUES ($1, $2, $3)
-        RETURNING id, email, role as "role: _", created_at
+        RETURNING id, role as "role: _", created_at
         "#,
         email,
         hash,
@@ -87,27 +83,22 @@ pub async fn register_user(
     }
 }
 
-pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
+pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
     if owner_exists(pool).await? {
         tracing::info!("Platform owner exists, skipping bootstrap");
         return Ok(());
     }
 
-    let email = std::env::var("PLATFORM_OWNER_EMAIL")
-        .map_err(|_| anyhow::anyhow!("Bootstrap failed, PLATFORM_OWNER_EMAIL not set"))?;
-    let password = std::env::var("PLATFORM_OWNER_PASSWORD")
-        .map_err(|_| anyhow::anyhow!("Bootstrap failed, PLATFORM_OWNER_PASSWORD not set"))?;
+    let email = std::env::var("PLATFORM_OWNER_EMAIL").map_err(|_| BootstrapError::MissingEmail)?;
+    let password =
+        std::env::var("PLATFORM_OWNER_PASSWORD").map_err(|_| BootstrapError::MissingPassword)?;
 
-    if email.trim().is_empty() || password.is_empty() {
-        return Err(anyhow::anyhow!(
-            "Bootstrap failed, PLATFORM_OWNER_EMAIL and PLATFORM_OWNER_PASSWORD must not be empty"
-        ));
+    if email.trim().is_empty() {
+        return Err(BootstrapError::MissingEmail);
     }
 
     if password.len() < 8 || password.len() > 128 {
-        return Err(anyhow::anyhow!(
-            "Bootstrap failed, PLATFORM_OWNER_PASSWORD must be at least 8 characters and 128 at most"
-        ));
+        return Err(BootstrapError::InvalidPasswordLength);
     }
 
     tracing::info!("No platform owner found, creating from environment");
@@ -124,24 +115,23 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), anyhow::Error> {
                 tracing::warn!("Platform owner was created concurrently, continuing startup");
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("Failed to create owner"))
+                Err(BootstrapError::CreateFailed)
             }
         }
-        Err(error) => Err(anyhow::anyhow!("Failed to create owner: {error}")),
+        Err(_) => Err(BootstrapError::CreateFailed),
     }
 }
 
-async fn owner_exists(pool: &PgPool) -> Result<bool, anyhow::Error> {
+async fn owner_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
     let res =
         sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM platform_user WHERE role = 'owner')")
             .fetch_one(pool)
-            .await
-            .map_err(|err| anyhow::anyhow!("DB error: {err}"))?
+            .await?
             .unwrap_or(false);
     Ok(res)
 }
 
-async fn hash_password(password: &str) -> Result<String, anyhow::Error> {
+async fn hash_password(password: &str) -> Result<String, UserCreateError> {
     let password = password.to_string();
 
     tokio::task::spawn_blocking(move || {
@@ -151,8 +141,8 @@ async fn hash_password(password: &str) -> Result<String, anyhow::Error> {
             .map(|h| h.to_string())
     })
     .await
-    .map_err(|e| anyhow::anyhow!("Password hashing task panicked: {e}"))?
-    .map_err(|e| anyhow::anyhow!("Argon2 error: {e}"))
+    .map_err(|_| UserCreateError::PasswordHashing)?
+    .map_err(|_| UserCreateError::PasswordHashing)
 }
 
 async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginError> {
@@ -160,11 +150,11 @@ async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginE
     let stored_hash = stored_hash.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let hash = PasswordHash::new(&stored_hash).map_err(|e| LoginError::Other(e.to_string()))?;
+        let hash = PasswordHash::new(&stored_hash).map_err(|_| LoginError::PasswordParse)?;
         Argon2::default()
             .verify_password(password.as_bytes(), &hash)
             .map_err(|_| LoginError::PasswordMismatch)
     })
     .await
-    .map_err(|e| LoginError::Other(e.to_string()))?
+    .map_err(|_| LoginError::PasswordParse)?
 }

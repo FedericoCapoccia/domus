@@ -1,56 +1,38 @@
-use std::fmt::Display;
-
 use crate::error::ProblemDetails;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum LoginError {
-    UserNotFound,
+    #[error("User not found")]
+    UserNotFound(String /* email */),
+    #[error("Password does not match")]
     PasswordMismatch,
-    Database(sqlx::Error),
-    Other(String),
-}
-
-impl Display for LoginError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LoginError::UserNotFound => write!(f, "User not found"),
-            LoginError::PasswordMismatch => {
-                write!(f, "Password does not match")
-            }
-            LoginError::Database(error) => write!(f, "Query error: {error}"),
-            LoginError::Other(message) => write!(f, "{message}"),
-        }
-    }
+    #[error("Invalid password hash format")]
+    PasswordParse,
+    #[error("Database error")]
+    Database(#[from] sqlx::Error),
 }
 
 impl From<LoginError> for ProblemDetails {
     fn from(err: LoginError) -> Self {
         match err {
-            LoginError::UserNotFound | LoginError::PasswordMismatch => {
+            LoginError::Database(_) | LoginError::PasswordParse => ProblemDetails::internal_error(),
+            LoginError::UserNotFound(_) | LoginError::PasswordMismatch => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
-            LoginError::Other(_) | LoginError::Database(_) => ProblemDetails::internal_error(),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum UserCreateError {
-    EmailExists(String),
-    OwnerExists(String),
-    PasswordHashing(anyhow::Error),
-    Database(sqlx::Error),
-}
-
-impl Display for UserCreateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UserCreateError::EmailExists(email) => write!(f, "Email '{email}' already exists"),
-            UserCreateError::OwnerExists(email) => write!(f, "Owner '{email}' already exists"),
-            UserCreateError::PasswordHashing(err) => write!(f, "Failed to hash password: {err}"),
-            UserCreateError::Database(error) => write!(f, "Query error: {error}"),
-        }
-    }
+    #[error("Email already exists")]
+    EmailExists(String /* email */),
+    #[error("Owner already exists")]
+    OwnerExists(String /* email */),
+    #[error("Failed to hash password")]
+    PasswordHashing,
+    #[error("Database error")]
+    Database(#[from] sqlx::Error),
 }
 
 impl From<UserCreateError> for ProblemDetails {
@@ -61,9 +43,23 @@ impl From<UserCreateError> for ProblemDetails {
             }
             // I want to return 500 on OwnerExists to safeguard owner's email if this gets leaked
             // into an handler somehow
-            UserCreateError::PasswordHashing(_)
+            UserCreateError::PasswordHashing
             | UserCreateError::Database(_)
             | UserCreateError::OwnerExists(_) => ProblemDetails::internal_error(),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BootstrapError {
+    #[error("PLATFORM_OWNER_EMAIL not set")]
+    MissingEmail,
+    #[error("PLATFORM_OWNER_PASSWORD not set")]
+    MissingPassword,
+    #[error("Password must be 8-128 characters")]
+    InvalidPasswordLength,
+    #[error("Database error")]
+    Database(#[from] sqlx::Error),
+    #[error("Failed to create owner")]
+    CreateFailed,
 }
