@@ -36,8 +36,7 @@ async fn run() -> anyhow::Result<()> {
         .port(5432) // TODO: add env
         .username(&std::env::var("POSTGRES_USER")?)
         .password(&std::env::var("POSTGRES_PASSWORD")?)
-        .database(&std::env::var("POSTGRES_DB")?)
-        .log_statements(tracing::log::LevelFilter::Warn);
+        .database(&std::env::var("POSTGRES_DB")?);
 
     let state = AppState {
         pool: PgPool::connect_with(opts).await?,
