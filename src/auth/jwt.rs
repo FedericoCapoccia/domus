@@ -1,6 +1,16 @@
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Serialize;
 
+// TODO: return JwtError
+// pub enum JwtError {
+//     Generation(jsonwebtoken::errors::Error),
+//     Verification(jsonwebtoken::errors::Error),
+//     Expired,
+//     Invalid,
+// }
+// - Generation(_) → 500
+// - Verification(_) | Expired | Invalid → 401
+
 #[derive(Serialize)]
 pub struct JwtResponse {
     pub token: String,
