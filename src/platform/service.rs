@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::platform::{
     domain::PlatformRole,
     dto::UserCreatedResponse,
-    types::{LoginError, UserCreateError},
+    error::{LoginError, UserCreateError},
 };
 
 #[derive(sqlx::FromRow)]

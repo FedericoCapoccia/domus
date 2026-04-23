@@ -9,7 +9,7 @@ use axum::{
 use crate::{
     AppState,
     error::ProblemDetails,
-    platform::{service, types::LoginRequest},
+    platform::{dto::LoginRequest, service},
 };
 
 // NOTE:
