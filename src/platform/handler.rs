@@ -7,11 +7,12 @@ use axum::{
 };
 
 use crate::{
-    AppState,
+    app::AppState,
+    auth::jwt,
     error::ProblemDetails,
-    extractor::ValidatedJson,
-    jwt,
+    extractors::validated_json::ValidatedJson,
     platform::{
+        claims::Claims,
         dto::{LoginRequest, UserCreateRequest},
         service,
     },
@@ -38,9 +39,12 @@ async fn login(
     ValidatedJson(req): ValidatedJson<LoginRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
     let user = service::login(&state.pool, &req.email, &req.password).await?;
-    let token = jwt::generate(user.id, &user.email, user.role, &state.encoding_key, 15)
+
+    let claims = Claims::new(user.id.into(), 15, &user.email, user.role);
+    let jwt = jwt::generate(&claims, &state.encoding_key)
         .map_err(|_| ProblemDetails::internal_error())?;
-    Ok((StatusCode::OK, Json(token)))
+
+    Ok((StatusCode::OK, Json(jwt)))
 }
 
 async fn register(

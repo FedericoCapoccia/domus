@@ -154,8 +154,8 @@ impl From<JsonRejection> for ProblemDetails {
     }
 }
 
-impl From<jsonwebtoken::errors::Error> for ProblemDetails {
-    fn from(err: jsonwebtoken::errors::Error) -> Self {
-        match err {}
-    }
-}
+// impl From<jsonwebtoken::errors::Error> for ProblemDetails {
+//     fn from(err: jsonwebtoken::errors::Error) -> Self {
+//         match err {}
+//     }
+// }

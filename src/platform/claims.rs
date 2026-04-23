@@ -1,7 +1,4 @@
-use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
-use uuid::Uuid;
 
 use crate::platform::PlatformRole;
 
@@ -19,7 +16,7 @@ pub struct Claims {
 
 impl Claims {
     pub fn new(sub: String, exp: i64, email: &str, role: PlatformRole) -> Self {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
         Self {
             sub,
             iat: now,
@@ -30,15 +27,4 @@ impl Claims {
             role,
         }
     }
-}
-
-pub fn generate(
-    user_id: Uuid,
-    email: &str,
-    role: PlatformRole,
-    encoding_key: &EncodingKey,
-    exp: i64,
-) -> Result<String, jsonwebtoken::errors::Error> {
-    let claims = Claims::new(user_id.to_string(), exp, email, role);
-    encode(&Header::default(), &claims, encoding_key)
 }
