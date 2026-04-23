@@ -14,7 +14,6 @@ use crate::platform::{
 #[derive(sqlx::FromRow)]
 pub struct UserLoginInfo {
     pub id: Uuid,
-    pub email: String,
     pub password_hash: String,
     pub role: PlatformRole,
 }
@@ -26,7 +25,7 @@ pub async fn login(
 ) -> Result<UserLoginInfo, LoginError> {
     let user = sqlx::query_as!(
         UserLoginInfo, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
-        r#"SELECT id, email, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
+        r#"SELECT id, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
         email
     )
     .fetch_optional(pool)

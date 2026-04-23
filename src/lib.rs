@@ -33,7 +33,7 @@ pub async fn run() -> anyhow::Result<()> {
     let state = app::AppState {
         pool: PgPool::connect_with(opts).await?,
         encoding_key: EncodingKey::from_secret(jwt_secret.as_bytes()),
-        decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
+        _decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
     };
 
     sqlx::migrate!().run(&state.pool).await?;
