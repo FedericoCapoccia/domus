@@ -5,6 +5,8 @@ mod extractors;
 mod platform;
 mod util;
 
+pub use app::AppState;
+
 use std::time::Duration;
 
 use axum::{Router, extract::DefaultBodyLimit, http::StatusCode, routing::get};
@@ -45,21 +47,23 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
-
     platform::ensure_owner(&state.pool).await?;
 
-    let router = Router::new()
-        .route("/healthz", get(healthz))
-        .nest("/api/v1/platform", platform::handler::router())
-        .layer(DefaultBodyLimit::max(1024 * 1024))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
-
+    let router = build_router(state);
     let bind_addr = format!("0.0.0.0:{}", env_u16("DOMUS_PORT", 3000)?);
     let listener = TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, router).await?;
 
     Ok(())
+}
+
+pub fn build_router(state: AppState) -> Router {
+    Router::new()
+        .route("/healthz", get(healthz))
+        .nest("/api/v1/platform", platform::handler::router())
+        .layer(DefaultBodyLimit::max(1024 * 1024))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 fn env_u16(name: &str, default: u16) -> anyhow::Result<u16> {

@@ -8,7 +8,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 //
 // TODO:
 // Integration test plan:
-// - Extract reusable `build_router(AppState)` from `src/lib.rs::run()`.
 // - Add DB-backed tests in `tests/platform_auth.rs` using `#[sqlx::test(migrations = "./migrations")]`.
 // - Test `POST /api/v1/platform/users`:
 //   - valid registration returns `201`
