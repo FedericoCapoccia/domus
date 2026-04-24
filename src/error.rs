@@ -179,8 +179,113 @@ impl From<JsonRejection> for ProblemDetails {
     }
 }
 
-// impl From<jsonwebtoken::errors::Error> for ProblemDetails {
-//     fn from(err: jsonwebtoken::errors::Error) -> Self {
-//         match err {}
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use axum::{
+        http::{StatusCode, header},
+        response::IntoResponse,
+    };
+    use serde::Deserialize;
+    use validator::{Validate, ValidationErrors};
+
+    use super::ProblemDetails;
+
+    #[derive(Debug, Deserialize)]
+    struct SerializedProblemDetails {
+        title: String,
+        status: u16,
+        detail: String,
+        errors: Option<Vec<SerializedFieldError>>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct SerializedFieldError {
+        field: String,
+        code: String,
+        message: String,
+    }
+
+    #[derive(Validate)]
+    struct TestPayload {
+        #[validate(email)]
+        email: String,
+    }
+
+    #[test]
+    fn unauthorized_response_has_problem_json_status_and_content_type() {
+        let response = ProblemDetails::unauthorized("Invalid credentials".into()).into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "application/problem+json"
+        );
+    }
+
+    #[test]
+    fn bearer_unauthorized_response_sets_www_authenticate_header() {
+        let response = ProblemDetails::bearer_unauthorized("Invalid token".into()).into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::WWW_AUTHENTICATE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "Bearer"
+        );
+    }
+
+    #[test]
+    fn conflict_response_has_conflict_status() {
+        let response = ProblemDetails::conflict("Email already exists".into()).into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn validation_errors_convert_to_unprocessable_entity_problem() {
+        let errors = validation_errors();
+
+        let problem = ProblemDetails::from(errors);
+
+        assert_eq!(problem.status, StatusCode::UNPROCESSABLE_ENTITY.as_u16());
+        assert_eq!(problem.title, "Unprocessable Entity");
+        assert_eq!(problem.detail, "Validation failed");
+        assert_eq!(problem.errors.as_ref().unwrap().len(), 1);
+        assert_eq!(problem.errors.as_ref().unwrap()[0].field, "email");
+        assert_eq!(problem.errors.as_ref().unwrap()[0].code, "email");
+    }
+
+    #[test]
+    fn display_serializes_problem_details_as_json() {
+        let problem = ProblemDetails::from(validation_errors());
+        let serialized: SerializedProblemDetails =
+            serde_json::from_str(&problem.to_string()).unwrap();
+
+        assert_eq!(serialized.title, "Unprocessable Entity");
+        assert_eq!(serialized.status, StatusCode::UNPROCESSABLE_ENTITY.as_u16());
+        assert_eq!(serialized.detail, "Validation failed");
+
+        let errors = serialized.errors.unwrap();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].field, "email");
+        assert_eq!(errors[0].code, "email");
+        assert_eq!(errors[0].message, "Validation failed for field 'email'");
+    }
+
+    fn validation_errors() -> ValidationErrors {
+        TestPayload {
+            email: "not-an-email".into(),
+        }
+        .validate()
+        .unwrap_err()
+    }
+}

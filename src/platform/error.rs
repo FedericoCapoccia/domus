@@ -97,3 +97,36 @@ pub enum BootstrapError {
     #[error("Failed to create owner")]
     CreateFailed,
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::{http::StatusCode, response::IntoResponse};
+
+    use crate::error::ProblemDetails;
+
+    use super::{LoginError, UserCreateError};
+
+    #[test]
+    fn user_not_found_maps_to_unauthorized_problem() {
+        let response = ProblemDetails::from(LoginError::UserNotFound("user@example.com".into()))
+            .into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn password_mismatch_maps_to_unauthorized_problem() {
+        let response = ProblemDetails::from(LoginError::PasswordMismatch).into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn email_exists_maps_to_conflict_problem() {
+        let response =
+            ProblemDetails::from(UserCreateError::EmailExists("user@example.com".into()))
+                .into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+}

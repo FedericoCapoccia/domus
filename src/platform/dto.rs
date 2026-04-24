@@ -35,8 +35,47 @@ pub struct UserCreatedResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::UserCreateRequest;
+    use super::{LoginRequest, UserCreateRequest};
     use validator::Validate;
+
+    #[test]
+    fn login_normalizes_email() {
+        let req: LoginRequest = serde_json::from_str(
+            r#"{ "email": "  USER@Example.COM  ", "password": "password123" }"#,
+        )
+        .unwrap();
+
+        assert_eq!(req.email, "user@example.com");
+    }
+
+    #[test]
+    fn login_rejects_invalid_email() {
+        let req: LoginRequest =
+            serde_json::from_str(r#"{ "email": "not-an-email", "password": "password123" }"#)
+                .unwrap();
+        let err = req.validate().unwrap_err();
+
+        assert!(err.field_errors().contains_key("email"));
+    }
+
+    #[test]
+    fn login_rejects_short_password() {
+        let req: LoginRequest =
+            serde_json::from_str(r#"{ "email": "user@example.com", "password": "short" }"#)
+                .unwrap();
+        let err = req.validate().unwrap_err();
+
+        assert!(err.field_errors().contains_key("password"));
+    }
+
+    #[test]
+    fn login_rejects_unknown_fields() {
+        let result = serde_json::from_str::<LoginRequest>(
+            r#"{ "email": "user@example.com", "password": "password123", "role": "owner" }"#,
+        );
+
+        assert!(result.is_err());
+    }
 
     #[test]
     fn registration_normalizes_email() {
