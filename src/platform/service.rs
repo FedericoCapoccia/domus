@@ -4,11 +4,15 @@ use argon2::{
 };
 use sqlx::PgPool;
 use uuid::Uuid;
+use validator::Validate;
 
-use crate::platform::{
-    domain::PlatformRole,
-    dto::UserCreatedResponse,
-    error::{BootstrapError, LoginError, UserCreateError},
+use crate::{
+    error::ProblemDetails,
+    platform::{
+        domain::PlatformRole,
+        dto::{UserCreateRequest, UserCreatedResponse},
+        error::{BootstrapError, LoginError, UserCreateError},
+    },
 };
 
 #[derive(sqlx::FromRow)]
@@ -89,22 +93,27 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
         return Ok(());
     }
 
-    let email = std::env::var("PLATFORM_OWNER_EMAIL").map_err(|_| BootstrapError::MissingEmail)?;
-    let password =
-        std::env::var("PLATFORM_OWNER_PASSWORD").map_err(|_| BootstrapError::MissingPassword)?;
+    let req = UserCreateRequest {
+        email: std::env::var("PLATFORM_OWNER_EMAIL")
+            .map_err(|_| BootstrapError::MissingEmail)?
+            .trim()
+            .to_lowercase(),
+        password: std::env::var("PLATFORM_OWNER_PASSWORD")
+            .map_err(|_| BootstrapError::MissingPassword)?,
+    };
 
-    if email.trim().is_empty() {
-        return Err(BootstrapError::MissingEmail);
-    }
-
-    if password.len() < 8 || password.len() > 128 {
-        return Err(BootstrapError::InvalidPasswordLength);
+    if let Err(err) = req.validate() {
+        let problem = ProblemDetails::from(err);
+        tracing::error!(
+            error = %problem,
+            "invalid platform owner configuration"
+        );
+        return Err(BootstrapError::Validation);
     }
 
     tracing::info!("No platform owner found, creating from environment");
 
-    let email = email.trim().to_lowercase();
-    match register_user(pool, &email, &password, PlatformRole::Owner).await {
+    match register_user(pool, &req.email, &req.password, PlatformRole::Owner).await {
         Ok(_) => {
             tracing::info!("Created platform owner");
             Ok(())

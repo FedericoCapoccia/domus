@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use axum::{
     body::Body,
     extract::rejection::JsonRejection,
@@ -6,14 +8,14 @@ use axum::{
 };
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct FieldError {
     field: String,
     code: String,
     message: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ProblemDetails {
     #[serde(rename = "type")]
     type_: String,
@@ -91,6 +93,15 @@ impl ProblemDetails {
             detail,
             None,
         )
+    }
+}
+
+impl Display for ProblemDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(self) {
+            Ok(json) => f.write_str(&json),
+            Err(_) => f.write_str("failed to serialize problem details"),
+        }
     }
 }
 

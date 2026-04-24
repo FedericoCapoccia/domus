@@ -90,8 +90,8 @@ pub enum BootstrapError {
     MissingEmail,
     #[error("PLATFORM_OWNER_PASSWORD not set")]
     MissingPassword,
-    #[error("Password must be 8-128 characters")]
-    InvalidPasswordLength,
+    #[error("Invalid platform owner configuration")]
+    Validation,
     #[error("Database error")]
     Database(#[from] sqlx::Error),
     #[error("Failed to create owner")]
