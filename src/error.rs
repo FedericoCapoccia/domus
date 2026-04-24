@@ -22,6 +22,8 @@ pub struct ProblemDetails {
     detail: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     errors: Option<Vec<FieldError>>,
+    #[serde(skip)]
+    www_authenticate: Option<&'static str>,
 }
 
 impl ProblemDetails {
@@ -37,6 +39,7 @@ impl ProblemDetails {
             status: status.as_u16(),
             detail,
             errors,
+            www_authenticate: None,
         }
     }
 
@@ -47,6 +50,12 @@ impl ProblemDetails {
             detail,
             None,
         )
+    }
+
+    pub fn bearer_unauthorized(detail: String) -> Self {
+        let mut problem = Self::unauthorized(detail);
+        problem.www_authenticate = Some("Bearer");
+        problem
     }
 
     pub fn internal_error() -> Self {
@@ -85,14 +94,19 @@ impl ProblemDetails {
     }
 }
 
-// TODO: Add 'WWW-Authenticate' header when 401
 impl IntoResponse for ProblemDetails {
     fn into_response(self) -> Response {
         let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-        Response::builder()
+        let mut response = Response::builder()
             .status(status)
-            .header(header::CONTENT_TYPE, "application/problem+json")
+            .header(header::CONTENT_TYPE, "application/problem+json");
+
+        if let Some(value) = self.www_authenticate {
+            response = response.header(header::WWW_AUTHENTICATE, value);
+        };
+
+        response
             .body(Body::from(
                 serde_json::to_string(&self).expect("ProblemDetails is serializable"),
             ))

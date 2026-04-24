@@ -2,17 +2,7 @@ use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::platform::PlatformRole;
-
-// TODO: return JwtError
-// pub enum JwtError {
-//     Generation(jsonwebtoken::errors::Error),
-//     Verification(jsonwebtoken::errors::Error),
-//     Expired,
-//     Invalid,
-// }
-// - Generation(_) → 500
-// - Verification(_) | Expired | Invalid → 401
+use crate::{error::ProblemDetails, platform::PlatformRole};
 
 #[derive(Serialize)]
 pub struct JwtResponse {
@@ -62,11 +52,49 @@ impl Claims {
     }
 }
 
-pub fn generate(
-    claims: &Claims,
-    encoding_key: &EncodingKey,
-) -> Result<JwtResponse, jsonwebtoken::errors::Error> {
+pub fn generate(claims: &Claims, encoding_key: &EncodingKey) -> Result<JwtResponse, JwtError> {
     Ok(JwtResponse {
-        token: encode(&Header::default(), &claims, encoding_key)?,
+        token: encode(&Header::default(), claims, encoding_key).map_err(JwtError::Generation)?,
     })
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum JwtError {
+    #[error("Failed to generate JWT")]
+    Generation(jsonwebtoken::errors::Error),
+    #[error("JWT expired")]
+    _Expired(jsonwebtoken::errors::Error),
+    #[error("JWT invalid")]
+    _Invalid(jsonwebtoken::errors::Error),
+}
+
+impl From<JwtError> for ProblemDetails {
+    fn from(err: JwtError) -> Self {
+        match &err {
+            JwtError::Generation(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = ?internal,
+                    "jwt generation"
+                );
+                ProblemDetails::internal_error()
+            }
+            JwtError::_Expired(internal) => {
+                tracing::warn!(
+                    error = %err,
+                    internal = ?internal,
+                    "jwt verification"
+                );
+                ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
+            }
+            JwtError::_Invalid(internal) => {
+                tracing::warn!(
+                    error = %err,
+                    internal = ?internal,
+                    "jwt verification"
+                );
+                ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
+            }
+        }
+    }
 }
