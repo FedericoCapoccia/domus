@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, email, password_hash, role as \"role: _\" FROM platform_user WHERE email = $1",
+  "query": "SELECT id, password_hash, role as \"role: _\" FROM platform_user WHERE email = $1",
   "describe": {
     "columns": [
       {
@@ -10,16 +10,11 @@
       },
       {
         "ordinal": 1,
-        "name": "email",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 2,
         "name": "password_hash",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "role: _",
         "type_info": {
           "Custom": {
@@ -43,9 +38,8 @@
     "nullable": [
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "78dcd06a94475e998d0f2a8147a5bbf0d8bda585eb4f77665d3ee7af6d9dfa5f"
+  "hash": "e5e586ea6b4f04cd2fdeb19fedf8173a3478c86a957207b4ca1d5af1b99dd36d"
 }

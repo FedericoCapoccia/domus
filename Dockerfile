@@ -9,6 +9,7 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 WORKDIR /app
+RUN useradd --system --user-group --no-create-home --shell /usr/sbin/nologin domus
 COPY --from=builder /app/target/release/domus ./domus
-EXPOSE 3000
+USER domus
 CMD ["./domus"]

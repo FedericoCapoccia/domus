@@ -1,7 +1,8 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
-// TODO: add some sort of testing (in-memory db pool?)
+// TODO: add rate limiting on /login
+// TODO: add auth middleware
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();

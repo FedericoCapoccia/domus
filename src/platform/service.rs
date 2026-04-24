@@ -38,11 +38,12 @@ pub async fn login(
     let user = match user {
         Some(user) => user,
         None => {
-            let _ = verify_password(
+            let dummy_result = verify_password(
                 password,
                 "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
             )
             .await;
+            let _ = std::hint::black_box(dummy_result);
             return Err(LoginError::UserNotFound(email.into()));
         }
     };

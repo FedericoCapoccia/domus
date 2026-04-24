@@ -5,9 +5,11 @@ mod extractors;
 mod platform;
 mod util;
 
-use axum::{Router, extract::DefaultBodyLimit};
+use std::time::Duration;
+
+use axum::{Router, extract::DefaultBodyLimit, http::StatusCode, routing::get};
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use sqlx::{PgPool, postgres::PgConnectOptions};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -25,13 +27,19 @@ pub async fn run() -> anyhow::Result<()> {
 
     let opts = PgConnectOptions::new()
         .host(&std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into()))
-        .port(5432) // TODO: add env
+        .port(env_u16("POSTGRES_PORT", 5432)?)
         .username(&std::env::var("POSTGRES_USER")?)
         .password(&std::env::var("POSTGRES_PASSWORD")?)
         .database(&std::env::var("POSTGRES_DB")?);
 
     let state = app::AppState {
-        pool: PgPool::connect_with(opts).await?,
+        pool: PgPoolOptions::new()
+            .acquire_timeout(Duration::from_secs(env_u64(
+                "POSTGRES_ACQUIRE_TIMEOUT_SECONDS",
+                5,
+            )?))
+            .connect_with(opts)
+            .await?,
         encoding_key: EncodingKey::from_secret(jwt_secret.as_bytes()),
         _decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
     };
@@ -41,13 +49,39 @@ pub async fn run() -> anyhow::Result<()> {
     platform::ensure_owner(&state.pool).await?;
 
     let router = Router::new()
+        .route("/healthz", get(healthz))
         .nest("/api/v1/platform", platform::handler::router())
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
+    let bind_addr = format!("0.0.0.0:{}", env_u16("DOMUS_PORT", 3000)?);
+    let listener = TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, router).await?;
 
     Ok(())
+}
+
+fn env_u16(name: &str, default: u16) -> anyhow::Result<u16> {
+    match std::env::var(name) {
+        Ok(value) => value
+            .parse()
+            .map_err(|_| anyhow::anyhow!("{name} must be a valid u16")),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(err) => Err(err.into()),
+    }
+}
+
+async fn healthz() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+fn env_u64(name: &str, default: u64) -> anyhow::Result<u64> {
+    match std::env::var(name) {
+        Ok(value) => value
+            .parse()
+            .map_err(|_| anyhow::anyhow!("{name} must be a valid u64")),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(err) => Err(err.into()),
+    }
 }
