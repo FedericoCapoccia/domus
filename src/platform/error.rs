@@ -14,8 +14,23 @@ pub enum LoginError {
 
 impl From<LoginError> for ProblemDetails {
     fn from(err: LoginError) -> Self {
-        match err {
-            LoginError::Database(_) | LoginError::PasswordParse(_) => ProblemDetails::internal_error(),
+        match &err {
+            LoginError::Database(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = ?internal,
+                    "login failed"
+                );
+                ProblemDetails::internal_error()
+            }
+            LoginError::PasswordParse(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = %internal,
+                    "login failed"
+                );
+                ProblemDetails::internal_error()
+            }
             LoginError::UserNotFound(_) | LoginError::PasswordMismatch => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
@@ -37,15 +52,27 @@ pub enum UserCreateError {
 
 impl From<UserCreateError> for ProblemDetails {
     fn from(err: UserCreateError) -> Self {
-        match err {
+        match &err {
             UserCreateError::EmailExists(_) => {
                 ProblemDetails::conflict("Email already exists".into())
             }
-            // I want to return 500 on OwnerExists to safeguard owner's email if this gets leaked
-            // into an handler somehow
-            UserCreateError::PasswordHashing(_)
-            | UserCreateError::Database(_)
-            | UserCreateError::OwnerExists(_) => ProblemDetails::internal_error(),
+            UserCreateError::OwnerExists(_) => ProblemDetails::internal_error(),
+            UserCreateError::PasswordHashing(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = %internal,
+                    "user creation failed"
+                );
+                ProblemDetails::internal_error()
+            }
+            UserCreateError::Database(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = ?internal,
+                    "user creation failed"
+                );
+                ProblemDetails::internal_error()
+            }
         }
     }
 }
