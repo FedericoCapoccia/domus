@@ -4,6 +4,8 @@ use uuid::Uuid;
 
 use crate::{error::ProblemDetails, platform::PlatformRole};
 
+const PLATFORM_ACCESS_TOKEN_TTL: time::Duration = time::Duration::minutes(15);
+
 #[derive(Serialize)]
 pub struct JwtResponse {
     pub token: String,
@@ -28,25 +30,27 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn platform(sub: Uuid, role: PlatformRole, minutes: i64) -> Self {
+    pub fn platform(sub: Uuid, role: PlatformRole) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
+
         Self {
             sub,
             iss: "domus".into(),
             iat: now,
             nbf: now,
-            exp: now + minutes * 60,
+            exp: now + PLATFORM_ACCESS_TOKEN_TTL.whole_seconds(),
             data: ClaimData::Platform { role },
         }
     }
-    pub fn _tenant(sub: Uuid, tenant_slug: String, minutes: i64) -> Self {
+    pub fn _tenant(sub: Uuid, tenant_slug: String) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
+
         Self {
             sub,
             iss: "domus".into(),
             iat: now,
             nbf: now,
-            exp: now + minutes * 60,
+            exp: now + PLATFORM_ACCESS_TOKEN_TTL.whole_seconds(),
             data: ClaimData::Tenant { tenant_slug },
         }
     }
@@ -117,7 +121,7 @@ mod tests {
         let sub = Uuid::now_v7();
         let before = time::OffsetDateTime::now_utc().unix_timestamp();
 
-        let claims = Claims::platform(sub, PlatformRole::Admin, 15);
+        let claims = Claims::platform(sub, PlatformRole::Admin);
 
         let after = time::OffsetDateTime::now_utc().unix_timestamp();
         assert_eq!(claims.sub, sub);
@@ -136,7 +140,7 @@ mod tests {
 
     #[test]
     fn platform_claims_serialize_with_platform_kind() {
-        let claims = Claims::platform(Uuid::now_v7(), PlatformRole::Owner, 15);
+        let claims = Claims::platform(Uuid::now_v7(), PlatformRole::Owner);
 
         let serialized = serde_json::to_value(&claims).unwrap();
 
@@ -149,7 +153,7 @@ mod tests {
         install_crypto_provider();
         let secret = b"secret-that-is-at-least-32-bytes-long";
         let sub = Uuid::now_v7();
-        let claims = Claims::platform(sub, PlatformRole::User, 15);
+        let claims = Claims::platform(sub, PlatformRole::User);
 
         let response = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
