@@ -39,6 +39,16 @@ mod tests {
     use validator::Validate;
 
     #[test]
+    fn registration_normalizes_email() {
+        let req: UserCreateRequest = serde_json::from_str(
+            r#"{ "email": "  USER@Example.COM  ", "password": "password123" }"#,
+        )
+        .unwrap();
+
+        assert_eq!(req.email, "user@example.com");
+    }
+
+    #[test]
     fn registration_rejects_invalid_email() {
         let req: UserCreateRequest =
             serde_json::from_str(r#"{ "email": "not-an-email", "password": "password123" }"#)
