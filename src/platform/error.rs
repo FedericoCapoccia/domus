@@ -32,6 +32,7 @@ impl From<LoginError> for ProblemDetails {
                 ProblemDetails::internal_error()
             }
             LoginError::UserNotFound(_) | LoginError::PasswordMismatch => {
+                tracing::warn!("login failed due to invalid credentials");
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
         }
@@ -56,7 +57,13 @@ impl From<UserCreateError> for ProblemDetails {
             UserCreateError::EmailExists(_) => {
                 ProblemDetails::conflict("Email already exists".into())
             }
-            UserCreateError::OwnerExists(_) => ProblemDetails::internal_error(),
+            UserCreateError::OwnerExists(_) => {
+                tracing::error!(
+                    error = %err,
+                    "user creation failed"
+                );
+                ProblemDetails::internal_error()
+            }
             UserCreateError::PasswordHashing(internal) => {
                 tracing::error!(
                     error = %err,
