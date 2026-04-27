@@ -1,7 +1,3 @@
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
-};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
@@ -13,6 +9,7 @@ use crate::{
         dto::{UserCreateRequest, UserCreatedResponse},
         error::{BootstrapError, LoginError, UserCreateError},
     },
+    util::password,
 };
 
 #[derive(sqlx::FromRow)]
@@ -38,7 +35,7 @@ pub async fn login(
     let user = match user {
         Some(user) => user,
         None => {
-            let dummy_result = verify_password(
+            let dummy_result = password::verify(
                 password,
                 "$argon2id$v=19$m=19456,t=2,p=1$UEViVXBNSThsbjJhSURLSg$o6V/wycFOBK3Th3a26vAwg",
             )
@@ -48,8 +45,10 @@ pub async fn login(
         }
     };
 
-    verify_password(password, &user.password_hash).await?;
-    Ok(user)
+    match password::verify(password, &user.password_hash).await? {
+        true => Ok(user),
+        false => Err(LoginError::PasswordMismatch),
+    }
 }
 
 pub async fn register_user(
@@ -58,7 +57,7 @@ pub async fn register_user(
     password: &str,
     role: PlatformRole,
 ) -> Result<UserCreatedResponse, UserCreateError> {
-    let hash = hash_password(password).await?;
+    let hash = password::hash(password).await?;
     let result = sqlx::query_as!(
         UserCreatedResponse,
         r#"
@@ -139,33 +138,4 @@ async fn owner_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
             .await?
             .unwrap_or(false);
     Ok(res)
-}
-
-async fn hash_password(password: &str) -> Result<String, UserCreateError> {
-    let password = password.to_string();
-
-    tokio::task::spawn_blocking(move || {
-        let salt = SaltString::generate(&mut OsRng);
-        Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
-            .map(|h| h.to_string())
-    })
-    .await
-    .map_err(|e| UserCreateError::PasswordHashing(format!("Task panic: {e}")))?
-    .map_err(|e| UserCreateError::PasswordHashing(format!("Argon2: {e}")))
-}
-
-async fn verify_password(password: &str, stored_hash: &str) -> Result<(), LoginError> {
-    let password = password.to_string();
-    let stored_hash = stored_hash.to_string();
-
-    tokio::task::spawn_blocking(move || {
-        let hash = PasswordHash::new(&stored_hash)
-            .map_err(|e| LoginError::PasswordParse(format!("Argon2: {e}")))?;
-        Argon2::default()
-            .verify_password(password.as_bytes(), &hash)
-            .map_err(|_| LoginError::PasswordMismatch)
-    })
-    .await
-    .map_err(|e| LoginError::PasswordParse(format!("Task panic: {e}")))?
 }

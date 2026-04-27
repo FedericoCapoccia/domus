@@ -1,4 +1,7 @@
-use crate::error::ProblemDetails;
+use crate::{
+    error::ProblemDetails,
+    util::password::{PasswordHashError, PasswordVerifyError},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoginError {
@@ -6,8 +9,8 @@ pub enum LoginError {
     UserNotFound(String /* email */),
     #[error("Password does not match")]
     PasswordMismatch,
-    #[error("Couldn't parse the password hash")]
-    PasswordParse(String),
+    #[error("Password verification failed")]
+    VerifyError(#[from] PasswordVerifyError),
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 }
@@ -23,7 +26,7 @@ impl From<LoginError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            LoginError::PasswordParse(internal) => {
+            LoginError::VerifyError(internal) => {
                 tracing::error!(
                     error = %err,
                     internal = %internal,
@@ -46,7 +49,7 @@ pub enum UserCreateError {
     #[error("Owner already exists")]
     OwnerExists(String /* email */),
     #[error("Failed to hash password")]
-    PasswordHashing(String),
+    HashingError(#[from] PasswordHashError),
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 }
@@ -64,7 +67,7 @@ impl From<UserCreateError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            UserCreateError::PasswordHashing(internal) => {
+            UserCreateError::HashingError(internal) => {
                 tracing::error!(
                     error = %err,
                     internal = %internal,

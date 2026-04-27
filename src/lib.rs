@@ -3,7 +3,7 @@ mod auth;
 mod error;
 mod extractors;
 mod platform;
-mod util;
+pub mod util;
 
 pub use app::AppState;
 
