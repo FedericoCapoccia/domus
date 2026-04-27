@@ -105,9 +105,7 @@ pub enum BootstrapError {
 mod tests {
     use axum::{http::StatusCode, response::IntoResponse};
 
-    use crate::error::ProblemDetails;
-
-    use super::{LoginError, UserCreateError};
+    use super::*;
 
     #[test]
     fn user_not_found_maps_to_unauthorized_problem() {

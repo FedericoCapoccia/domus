@@ -1,11 +1,17 @@
+pub mod util;
+
 mod app;
 mod auth;
 mod error;
 mod extractors;
 mod platform;
-pub mod util;
 
 pub use app::AppState;
+pub use platform::PlatformRole;
+
+pub mod jwt {
+    pub use crate::auth::jwt::{ClaimData, Claims, JwtError, install_crypto_provider, verify};
+}
 
 use std::time::Duration;
 
@@ -15,10 +21,10 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
+use crate::auth::jwt as auth_jwt;
+
 pub async fn run() -> anyhow::Result<()> {
-    jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
-        .install_default()
-        .expect("Failed to install JWT crypto provider");
+    auth_jwt::install_crypto_provider();
 
     let jwt_secret =
         std::env::var("JWT_SECRET").map_err(|_| anyhow::anyhow!("JWT_SECRET not set"))?;
@@ -43,7 +49,7 @@ pub async fn run() -> anyhow::Result<()> {
             .connect_with(opts)
             .await?,
         encoding_key: EncodingKey::from_secret(jwt_secret.as_bytes()),
-        _decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
+        decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
     };
 
     sqlx::migrate!().run(&state.pool).await?;

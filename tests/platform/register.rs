@@ -123,8 +123,5 @@ async fn register_rejects_unknown_fields(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(matches!(
-        response.status(),
-        StatusCode::UNPROCESSABLE_ENTITY
-    ));
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }

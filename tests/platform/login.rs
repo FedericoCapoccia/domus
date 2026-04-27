@@ -1,4 +1,6 @@
 use axum::{body::to_bytes, http::StatusCode};
+use domus::{PlatformRole, jwt};
+use jsonwebtoken::DecodingKey;
 use sqlx::PgPool;
 use tower::ServiceExt;
 
@@ -6,7 +8,8 @@ use super::helpers::{self, json_request};
 
 #[sqlx::test(migrations = "./migrations")]
 async fn login_with_valid_credentials_returns_jwt(pool: PgPool) {
-    helpers::seed_platform_user(&pool, "user@example.com", "password123", "user").await;
+    let user_id =
+        helpers::seed_platform_user(&pool, "user@example.com", "password123", "user").await;
     let app = helpers::app(pool);
 
     let response = app
@@ -23,8 +26,20 @@ async fn login_with_valid_credentials_returns_jwt(pool: PgPool) {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    // TODO: add JWT validation instead of checking if a string is returned
-    assert!(json["token"].as_str().is_some());
+    let token = json["token"].as_str().unwrap();
+    let claims = jwt::verify(token, &DecodingKey::from_secret(helpers::JWT_SECRET)).unwrap();
+    assert_eq!(claims.sub, user_id);
+    assert_eq!(claims.iss, "domus");
+    assert!(claims.iat <= claims.exp);
+    assert_eq!(claims.nbf, claims.iat);
+    assert!(claims.nbf <= claims.exp);
+    assert!(claims.exp > time::OffsetDateTime::now_utc().unix_timestamp());
+    assert!(matches!(
+        claims.data,
+        jwt::ClaimData::Platform {
+            role: PlatformRole::User
+        }
+    ));
 }
 
 #[sqlx::test(migrations = "./migrations")]

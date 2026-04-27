@@ -181,14 +181,9 @@ impl From<JsonRejection> for ProblemDetails {
 
 #[cfg(test)]
 mod tests {
-    use axum::{
-        http::{StatusCode, header},
-        response::IntoResponse,
-    };
+    use super::*;
     use serde::Deserialize;
     use validator::{Validate, ValidationErrors};
-
-    use super::ProblemDetails;
 
     #[derive(Debug, Deserialize)]
     struct SerializedProblemDetails {

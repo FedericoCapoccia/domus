@@ -1,10 +1,12 @@
-use jsonwebtoken::{EncodingKey, Header, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{error::ProblemDetails, platform::PlatformRole};
 
+const ISSUER: &str = "domus";
 const PLATFORM_ACCESS_TOKEN_TTL: time::Duration = time::Duration::minutes(15);
+static INSTALL_PROVIDER: std::sync::Once = std::sync::Once::new();
 
 #[derive(Serialize)]
 pub struct JwtResponse {
@@ -35,19 +37,19 @@ impl Claims {
 
         Self {
             sub,
-            iss: "domus".into(),
+            iss: ISSUER.into(),
             iat: now,
             nbf: now,
             exp: now + PLATFORM_ACCESS_TOKEN_TTL.whole_seconds(),
             data: ClaimData::Platform { role },
         }
     }
-    pub fn _tenant(sub: Uuid, tenant_slug: String) -> Self {
+    fn _tenant(sub: Uuid, tenant_slug: String) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
 
         Self {
             sub,
-            iss: "domus".into(),
+            iss: ISSUER.into(),
             iat: now,
             nbf: now,
             exp: now + PLATFORM_ACCESS_TOKEN_TTL.whole_seconds(),
@@ -62,14 +64,29 @@ pub fn generate(claims: &Claims, encoding_key: &EncodingKey) -> Result<JwtRespon
     })
 }
 
+pub fn verify(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JwtError> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_issuer(&[ISSUER]);
+
+    decode::<Claims>(token, decoding_key, &validation)
+        .map(|token| token.claims)
+        .map_err(JwtError::Invalid)
+}
+
+pub fn install_crypto_provider() {
+    INSTALL_PROVIDER.call_once(|| {
+        jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
+            .install_default()
+            .expect("failed to install JWT crypto provider");
+    });
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum JwtError {
     #[error("Failed to generate JWT")]
     Generation(jsonwebtoken::errors::Error),
-    #[error("JWT expired")]
-    _Expired(jsonwebtoken::errors::Error),
     #[error("JWT invalid")]
-    _Invalid(jsonwebtoken::errors::Error),
+    Invalid(jsonwebtoken::errors::Error),
 }
 
 impl From<JwtError> for ProblemDetails {
@@ -83,15 +100,7 @@ impl From<JwtError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            JwtError::_Expired(internal) => {
-                tracing::warn!(
-                    error = %err,
-                    internal = ?internal,
-                    "jwt verification"
-                );
-                ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
-            }
-            JwtError::_Invalid(internal) => {
+            JwtError::Invalid(internal) => {
                 tracing::warn!(
                     error = %err,
                     internal = ?internal,
@@ -105,16 +114,7 @@ impl From<JwtError> for ProblemDetails {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
-
-    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation, decode};
-    use uuid::Uuid;
-
-    use crate::platform::PlatformRole;
-
-    use super::{ClaimData, Claims, generate};
-
-    static INSTALL_PROVIDER: Once = Once::new();
+    use super::*;
 
     #[test]
     fn platform_claims_include_expected_registered_and_custom_fields() {
@@ -157,28 +157,14 @@ mod tests {
 
         let response = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
-        let token = decode::<Claims>(
-            &response.token,
-            &DecodingKey::from_secret(secret),
-            &Validation::new(Algorithm::HS256),
-        )
-        .unwrap();
-
-        assert_eq!(token.claims.sub, sub);
-        assert_eq!(token.claims.iss, "domus");
+        let claims = super::verify(&response.token, &DecodingKey::from_secret(secret)).unwrap();
+        assert_eq!(claims.sub, sub);
+        assert_eq!(claims.iss, "domus");
         assert!(matches!(
-            token.claims.data,
+            claims.data,
             ClaimData::Platform {
                 role: PlatformRole::User
             }
         ));
-    }
-
-    fn install_crypto_provider() {
-        INSTALL_PROVIDER.call_once(|| {
-            jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
-                .install_default()
-                .expect("failed to install JWT crypto provider");
-        });
     }
 }
