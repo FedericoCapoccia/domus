@@ -2,15 +2,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{
-    error::ProblemDetails,
-    platform::{
-        domain::PlatformRole,
-        dto::{UserCreateRequest, UserCreatedResponse},
-        error::{BootstrapError, LoginError, UserCreateError},
-    },
-    util::password,
+use super::{
+    domain::PlatformRole,
+    dto::{CreateUserRequest, CreateUserResponse},
+    error::{BootstrapError, CreateUserError, LoginError},
 };
+use crate::{error::ProblemDetails, util::password};
 
 #[derive(sqlx::FromRow)]
 pub struct UserLoginInfo {
@@ -51,15 +48,15 @@ pub async fn login(
     }
 }
 
-pub async fn register_user(
+pub async fn create_user(
     pool: &PgPool,
     email: &str,
     password: &str,
     role: PlatformRole,
-) -> Result<UserCreatedResponse, UserCreateError> {
+) -> Result<CreateUserResponse, CreateUserError> {
     let hash = password::hash(password).await?;
     let result = sqlx::query_as!(
-        UserCreatedResponse,
+        CreateUserResponse,
         r#"
         INSERT INTO platform_user (email, password_hash, role)
         VALUES ($1, $2, $3)
@@ -76,14 +73,14 @@ pub async fn register_user(
         Ok(user) => Ok(user),
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.constraint() == Some("platform_user_email_unique") {
-                Err(UserCreateError::EmailExists(email.into()))
+                Err(CreateUserError::EmailExists(email.into()))
             } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
-                Err(UserCreateError::OwnerExists(email.into()))
+                Err(CreateUserError::OwnerExists(email.into()))
             } else {
-                Err(UserCreateError::Database(sqlx::Error::Database(db_err)))
+                Err(CreateUserError::Database(sqlx::Error::Database(db_err)))
             }
         }
-        Err(err) => Err(UserCreateError::Database(err)),
+        Err(err) => Err(CreateUserError::Database(err)),
     }
 }
 
@@ -93,7 +90,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
         return Ok(());
     }
 
-    let req = UserCreateRequest {
+    let req = CreateUserRequest {
         email: std::env::var("PLATFORM_OWNER_EMAIL")
             .map_err(|_| BootstrapError::MissingEmail)?
             .trim()
@@ -113,12 +110,12 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
 
     tracing::info!("No platform owner found, creating from environment");
 
-    match register_user(pool, &req.email, &req.password, PlatformRole::Owner).await {
+    match create_user(pool, &req.email, &req.password, PlatformRole::Owner).await {
         Ok(_) => {
             tracing::info!("Created platform owner");
             Ok(())
         }
-        Err(UserCreateError::OwnerExists(_) | UserCreateError::EmailExists(_)) => {
+        Err(CreateUserError::OwnerExists(_) | CreateUserError::EmailExists(_)) => {
             // This is more of a safeguard
             if owner_exists(pool).await? {
                 tracing::warn!("Platform owner was created concurrently, continuing startup");

@@ -1,17 +1,27 @@
-pub mod util;
+pub mod api {
+    pub mod platform {
+        pub use crate::platform::api::{
+            CreateUserRequest, CreateUserResponse, LoginRequest, LoginResponse, PlatformRole,
+        };
+    }
+}
+
+pub mod jwt {
+    pub use crate::auth::jwt::{ClaimData, Claims, JwtError, install_crypto_provider, verify};
+}
+
+pub mod password {
+    pub use crate::util::password::{PasswordHashError, PasswordVerifyError, hash, verify};
+}
+
+pub use app::AppState;
 
 mod app;
 mod auth;
 mod error;
 mod extractors;
 mod platform;
-
-pub use app::AppState;
-pub use platform::PlatformRole;
-
-pub mod jwt {
-    pub use crate::auth::jwt::{ClaimData, Claims, JwtError, install_crypto_provider, verify};
-}
+mod util;
 
 use std::time::Duration;
 
@@ -21,10 +31,10 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-use crate::auth::jwt as auth_jwt;
+use crate::platform::service::ensure_owner;
 
 pub async fn run() -> anyhow::Result<()> {
-    auth_jwt::install_crypto_provider();
+    auth::jwt::install_crypto_provider();
 
     let jwt_secret =
         std::env::var("JWT_SECRET").map_err(|_| anyhow::anyhow!("JWT_SECRET not set"))?;
@@ -53,7 +63,7 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
-    platform::ensure_owner(&state.pool).await?;
+    ensure_owner(&state.pool).await?;
 
     let router = build_router(state);
     let bind_addr = format!("0.0.0.0:{}", env_u16("DOMUS_PORT", 3000)?);
@@ -67,7 +77,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .nest("/api/v1/platform", platform::handler::router())
-        .layer(DefaultBodyLimit::max(1024 * 1024))
+        .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

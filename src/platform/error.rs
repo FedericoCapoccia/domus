@@ -43,7 +43,7 @@ impl From<LoginError> for ProblemDetails {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum UserCreateError {
+pub enum CreateUserError {
     #[error("Email already exists")]
     EmailExists(String /* email */),
     #[error("Owner already exists")]
@@ -54,20 +54,20 @@ pub enum UserCreateError {
     Database(#[from] sqlx::Error),
 }
 
-impl From<UserCreateError> for ProblemDetails {
-    fn from(err: UserCreateError) -> Self {
+impl From<CreateUserError> for ProblemDetails {
+    fn from(err: CreateUserError) -> Self {
         match &err {
-            UserCreateError::EmailExists(_) => {
+            CreateUserError::EmailExists(_) => {
                 ProblemDetails::conflict("Email already exists".into())
             }
-            UserCreateError::OwnerExists(_) => {
+            CreateUserError::OwnerExists(_) => {
                 tracing::error!(
                     error = %err,
                     "user creation failed"
                 );
                 ProblemDetails::internal_error()
             }
-            UserCreateError::HashingError(internal) => {
+            CreateUserError::HashingError(internal) => {
                 tracing::error!(
                     error = %err,
                     internal = %internal,
@@ -75,7 +75,7 @@ impl From<UserCreateError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            UserCreateError::Database(internal) => {
+            CreateUserError::Database(internal) => {
                 tracing::error!(
                     error = %err,
                     internal = ?internal,
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn email_exists_maps_to_conflict_problem() {
         let response =
-            ProblemDetails::from(UserCreateError::EmailExists("user@example.com".into()))
+            ProblemDetails::from(CreateUserError::EmailExists("user@example.com".into()))
                 .into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);

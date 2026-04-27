@@ -3,9 +3,10 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{platform::domain::PlatformRole, util::serde::deserialize_normalized_email};
+use super::domain::PlatformRole;
+use crate::util::serde::deserialize_normalized_email;
 
-#[derive(Deserialize, Validate)]
+#[derive(Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
     #[serde(deserialize_with = "deserialize_normalized_email")]
@@ -15,9 +16,14 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub token: String,
+}
+
+#[derive(Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
-pub struct UserCreateRequest {
+pub struct CreateUserRequest {
     #[serde(deserialize_with = "deserialize_normalized_email")]
     #[validate(email, length(max = 254))]
     pub email: String,
@@ -25,8 +31,8 @@ pub struct UserCreateRequest {
     pub password: String,
 }
 
-#[derive(Serialize)]
-pub struct UserCreatedResponse {
+#[derive(Serialize, Deserialize)]
+pub struct CreateUserResponse {
     pub id: Uuid,
     pub role: PlatformRole,
     #[serde(with = "time::serde::rfc3339")]

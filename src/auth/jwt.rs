@@ -2,25 +2,20 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::ProblemDetails, platform::PlatformRole};
+use crate::{error::ProblemDetails, platform::api::PlatformRole};
 
 const ISSUER: &str = "domus";
 const PLATFORM_ACCESS_TOKEN_TTL: time::Duration = time::Duration::minutes(15);
 static INSTALL_PROVIDER: std::sync::Once = std::sync::Once::new();
 
-#[derive(Serialize)]
-pub struct JwtResponse {
-    pub token: String,
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ClaimData {
     Platform { role: PlatformRole },
     Tenant { tenant_slug: String },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Claims {
     pub sub: Uuid,
     pub iss: String,
@@ -44,7 +39,7 @@ impl Claims {
             data: ClaimData::Platform { role },
         }
     }
-    fn _tenant(sub: Uuid, tenant_slug: String) -> Self {
+    fn tenant(sub: Uuid, tenant_slug: String) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
 
         Self {
@@ -58,10 +53,8 @@ impl Claims {
     }
 }
 
-pub fn generate(claims: &Claims, encoding_key: &EncodingKey) -> Result<JwtResponse, JwtError> {
-    Ok(JwtResponse {
-        token: encode(&Header::default(), claims, encoding_key).map_err(JwtError::Generation)?,
-    })
+pub fn generate(claims: &Claims, encoding_key: &EncodingKey) -> Result<String, JwtError> {
+    encode(&Header::default(), claims, encoding_key).map_err(JwtError::Generation)
 }
 
 pub fn verify(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JwtError> {
@@ -157,7 +150,7 @@ mod tests {
 
         let response = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
-        let claims = super::verify(&response.token, &DecodingKey::from_secret(secret)).unwrap();
+        let claims = verify(&response, &DecodingKey::from_secret(secret)).unwrap();
         assert_eq!(claims.sub, sub);
         assert_eq!(claims.iss, "domus");
         assert!(matches!(
@@ -166,5 +159,82 @@ mod tests {
                 role: PlatformRole::User
             }
         ));
+    }
+
+    #[test]
+    fn verify_rejects_token_signed_with_different_secret() {
+        install_crypto_provider();
+        let claims = Claims::platform(Uuid::now_v7(), PlatformRole::User);
+        let token = generate(
+            &claims,
+            &EncodingKey::from_secret(b"secret-that-is-at-least-32-bytes-long"),
+        )
+        .unwrap();
+
+        let err = verify(
+            &token,
+            &DecodingKey::from_secret(b"different-secret-that-is-long-enough"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, JwtError::Invalid(_)));
+    }
+
+    #[test]
+    fn verify_rejects_expired_token() {
+        install_crypto_provider();
+        let secret = b"secret-that-is-at-least-32-bytes-long";
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let claims = Claims {
+            sub: Uuid::now_v7(),
+            iss: ISSUER.into(),
+            iat: now - 3600,
+            nbf: now - 3600,
+            exp: now - 1800,
+            data: ClaimData::Platform {
+                role: PlatformRole::User,
+            },
+        };
+        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        let err = super::verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
+
+        assert!(matches!(err, JwtError::Invalid(_)));
+    }
+
+    #[test]
+    fn verify_rejects_token_with_wrong_issuer() {
+        install_crypto_provider();
+        let secret = b"secret-that-is-at-least-32-bytes-long";
+        let mut claims = Claims::platform(Uuid::now_v7(), PlatformRole::User);
+        claims.iss = "not-domus".into();
+        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        let err = super::verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
+
+        assert!(matches!(err, JwtError::Invalid(_)));
+    }
+
+    #[test]
+    fn verify_rejects_malformed_token() {
+        install_crypto_provider();
+
+        let err = super::verify(
+            "not-a-jwt",
+            &DecodingKey::from_secret(b"secret-that-is-at-least-32-bytes-long"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, JwtError::Invalid(_)));
+    }
+
+    #[test]
+    fn tenant_claims_serialize_with_tenant_kind() {
+        let claims = Claims::tenant(Uuid::now_v7(), "acme".into());
+
+        let serialized = serde_json::to_value(&claims).unwrap();
+
+        assert_eq!(serialized["kind"], "tenant");
+        assert_eq!(serialized["tenant_slug"], "acme");
     }
 }

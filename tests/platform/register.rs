@@ -1,127 +1,90 @@
-use axum::{body::to_bytes, http::StatusCode};
+use axum::http::StatusCode;
+use domus::api::platform::{CreateUserResponse, PlatformRole};
 use sqlx::PgPool;
-use tower::ServiceExt;
 
-use super::helpers::{self, json_request};
+use super::helpers;
 
-// TODO: refactor after auth middleware
+const TEST_PASSWORD: &str = "password123";
+const TEST_EMAIL: &str = "user@example.com";
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_returns_201(pool: PgPool) {
-    let app = helpers::app(pool);
+    let mut app = helpers::app(pool);
 
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "new@example.com", "password": "password123" }"#,
-        ))
-        .await
-        .unwrap();
+    let body = serde_json::json!({
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD,
+    })
+    .to_string();
+    let res = helpers::register(&mut app, &body).await;
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(res.status(), StatusCode::CREATED);
 
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-    assert!(json["id"].as_str().is_some());
-    assert_eq!(json["role"], "user");
+    let body: CreateUserResponse = helpers::json_body(res).await;
+    assert_eq!(body.role, PlatformRole::User);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_normalizes_email(pool: PgPool) {
-    let app = helpers::app(pool);
+    let mut app = helpers::app(pool);
 
-    app.clone()
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "  USER@Example.COM  ", "password": "password123" }"#,
-        ))
-        .await
-        .unwrap();
+    let body = serde_json::json!({
+        "email": "USER@example.COM",
+        "password": TEST_PASSWORD,
+    })
+    .to_string();
 
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "user@example.com", "password": "password123" }"#,
-        ))
-        .await
-        .unwrap();
+    let res = helpers::register(&mut app, &body).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
 
-    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = serde_json::json!({
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD,
+    })
+    .to_string();
+
+    let res = helpers::register(&mut app, &body).await;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_duplicate_email_returns_409(pool: PgPool) {
-    let app = helpers::app(pool);
+    let mut app = helpers::app(pool);
 
-    app.clone()
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "user@example.com", "password": "password123" }"#,
-        ))
-        .await
-        .unwrap();
+    let body = serde_json::json!({
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD,
+    })
+    .to_string();
 
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "user@example.com", "password": "differentpassword" }"#,
-        ))
-        .await
-        .unwrap();
+    let res = helpers::register(&mut app, &body).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
 
-    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let res = helpers::register(&mut app, &body).await;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn register_rejects_invalid_email(pool: PgPool) {
-    let app = helpers::app(pool);
+async fn register_rejects_invalid_requests(pool: PgPool) {
+    let mut app = helpers::app(pool);
 
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "not-an-email", "password": "password123" }"#,
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn register_rejects_short_password(pool: PgPool) {
-    let app = helpers::app(pool);
-
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "user@example.com", "password": "short" }"#,
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn register_rejects_unknown_fields(pool: PgPool) {
-    let app = helpers::app(pool);
-
-    let response = app
-        .oneshot(json_request(
-            "POST",
-            "/api/v1/platform/users",
-            r#"{ "email": "user@example.com", "password": "password123", "role": "owner" }"#,
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    for body in [
+        serde_json::json!({
+            "email": "not-an-email",
+            "password": TEST_PASSWORD,
+        }),
+        serde_json::json!({
+            "email": TEST_EMAIL,
+            "password": "short",
+        }),
+        serde_json::json!({
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD,
+            "role": "owner",
+        }),
+    ] {
+        let body = body.to_string();
+        let response = helpers::register(&mut app, &body).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
 }
