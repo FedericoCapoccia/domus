@@ -1,4 +1,3 @@
--- Add up migration script her
 CREATE TYPE platform_user_role AS ENUM ('owner', 'admin', 'user');
 
 CREATE TABLE platform_user (

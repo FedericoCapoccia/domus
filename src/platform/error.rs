@@ -6,7 +6,7 @@ use crate::{
 #[derive(Debug, thiserror::Error)]
 pub enum LoginError {
     #[error("User not found")]
-    UserNotFound(String /* email */),
+    UserNotFound,
     #[error("Password does not match")]
     PasswordMismatch,
     #[error("Password verification failed")]
@@ -34,8 +34,7 @@ impl From<LoginError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            LoginError::UserNotFound(_) | LoginError::PasswordMismatch => {
-                tracing::warn!("login failed due to invalid credentials");
+            LoginError::UserNotFound | LoginError::PasswordMismatch => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
         }
@@ -45,9 +44,9 @@ impl From<LoginError> for ProblemDetails {
 #[derive(Debug, thiserror::Error)]
 pub enum CreateUserError {
     #[error("Email already exists")]
-    EmailExists(String /* email */),
+    EmailExists,
     #[error("Owner already exists")]
-    OwnerExists(String /* email */),
+    OwnerExists,
     #[error("Failed to hash password")]
     HashingError(#[from] PasswordHashError),
     #[error("Database error")]
@@ -57,10 +56,8 @@ pub enum CreateUserError {
 impl From<CreateUserError> for ProblemDetails {
     fn from(err: CreateUserError) -> Self {
         match &err {
-            CreateUserError::EmailExists(_) => {
-                ProblemDetails::conflict("Email already exists".into())
-            }
-            CreateUserError::OwnerExists(_) => {
+            CreateUserError::EmailExists => ProblemDetails::conflict("Email already exists".into()),
+            CreateUserError::OwnerExists => {
                 tracing::error!(
                     error = %err,
                     "user creation failed"
@@ -109,24 +106,19 @@ mod tests {
 
     #[test]
     fn user_not_found_maps_to_unauthorized_problem() {
-        let response = ProblemDetails::from(LoginError::UserNotFound("user@example.com".into()))
-            .into_response();
-
+        let response = ProblemDetails::from(LoginError::UserNotFound).into_response();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
     fn password_mismatch_maps_to_unauthorized_problem() {
         let response = ProblemDetails::from(LoginError::PasswordMismatch).into_response();
-
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
     fn email_exists_maps_to_conflict_problem() {
-        let response =
-            ProblemDetails::from(CreateUserError::EmailExists("user@example.com".into()))
-                .into_response();
+        let response = ProblemDetails::from(CreateUserError::EmailExists).into_response();
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
     }

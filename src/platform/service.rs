@@ -38,7 +38,7 @@ pub async fn login(
             )
             .await;
             let _ = std::hint::black_box(dummy_result);
-            return Err(LoginError::UserNotFound(email.into()));
+            return Err(LoginError::UserNotFound);
         }
     };
 
@@ -73,9 +73,9 @@ pub async fn create_user(
         Ok(user) => Ok(user),
         Err(sqlx::Error::Database(db_err)) => {
             if db_err.constraint() == Some("platform_user_email_unique") {
-                Err(CreateUserError::EmailExists(email.into()))
+                Err(CreateUserError::EmailExists)
             } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
-                Err(CreateUserError::OwnerExists(email.into()))
+                Err(CreateUserError::OwnerExists)
             } else {
                 Err(CreateUserError::Database(sqlx::Error::Database(db_err)))
             }
@@ -115,7 +115,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
             tracing::info!("Created platform owner");
             Ok(())
         }
-        Err(CreateUserError::OwnerExists(_) | CreateUserError::EmailExists(_)) => {
+        Err(CreateUserError::OwnerExists | CreateUserError::EmailExists) => {
             // This is more of a safeguard
             if owner_exists(pool).await? {
                 tracing::warn!("Platform owner was created concurrently, continuing startup");
