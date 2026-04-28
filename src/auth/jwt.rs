@@ -92,6 +92,11 @@ impl From<JwtError> for ProblemDetails {
                 ProblemDetails::internal_error()
             }
             JwtError::Invalid(internal) => {
+                tracing::debug!(
+                    error = %err,
+                    internal = ?internal,
+                    "jwt verification"
+                );
                 ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
             }
         }
