@@ -69,6 +69,18 @@ pub async fn register_without_token(app: &mut axum::Router, body: &str) -> Respo
         .unwrap()
 }
 
+pub async fn me_authed(app: &mut axum::Router, token: &str) -> Response<Body> {
+    app.oneshot(json_request("GET", "/api/v1/platform/me", Some(token), ""))
+        .await
+        .unwrap()
+}
+
+pub async fn me_without_token(app: &mut axum::Router) -> Response<Body> {
+    app.oneshot(json_request("GET", "/api/v1/platform/me", None, ""))
+        .await
+        .unwrap()
+}
+
 fn json_request(method: &str, path: &str, token: Option<&str>, body: &str) -> Request<Body> {
     let mut builder = Request::builder().method(method).uri(path).header(
         header::CONTENT_TYPE,

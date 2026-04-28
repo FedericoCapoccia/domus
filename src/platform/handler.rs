@@ -1,6 +1,10 @@
 use axum::{
-    Extension, Json, Router, extract::State, http::StatusCode, middleware, response::IntoResponse,
-    routing::post,
+    Extension, Json, Router,
+    extract::State,
+    http::StatusCode,
+    middleware,
+    response::IntoResponse,
+    routing::{get, post},
 };
 
 use super::{
@@ -15,6 +19,7 @@ use crate::{
     },
     error::ProblemDetails,
     extractors::validated_json::ValidatedJson,
+    platform::dto::MeResponse,
 };
 
 // NOTE:
@@ -25,16 +30,15 @@ use crate::{
 // .route("/login", post(login))
 // .route("/logout", post(async || {}))
 // .route("/users", get(async || {}))
-// .route("/users", post(register))
 // .route("/users/id", get(async || {}))
 // .route("/users/id", delete(async || {}))
 // .route("/users/id/role", post(async || {}))
-// .route("/me", get(async || {}))
 // .route("/me", patch(async || {}))
 // }
 
 pub fn router(state: AppState) -> Router<AppState> {
     let protected = Router::new()
+        .route("/me", get(get_authenticated_user))
         .route("/users", post(register))
         .route_layer(middleware::from_fn_with_state(state, require_platform_auth));
     Router::new().route("/login", post(login)).merge(protected)
@@ -76,6 +80,13 @@ async fn register(
     }
 
     let created = service::create_user(&state.pool, &req.email, &req.password, req.role).await?;
-
     Ok((StatusCode::CREATED, Json(created)))
+}
+
+async fn get_authenticated_user(
+    State(state): State<AppState>,
+    Extension(auth): Extension<PlatformAuth>,
+) -> Result<impl IntoResponse, ProblemDetails> {
+    let user = service::get_user_by_id(&state.pool, auth.user_id).await?;
+    Ok((StatusCode::OK, Json(MeResponse::from(user))))
 }

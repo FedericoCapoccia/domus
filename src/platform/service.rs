@@ -3,26 +3,23 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    domain::PlatformRole,
+    domain::{PlatformRole, PlatformUserCredentials},
     dto::{CreateUserRequest, CreateUserResponse},
     error::{BootstrapError, CreateUserError, LoginError},
 };
-use crate::{error::ProblemDetails, util::password};
-
-#[derive(sqlx::FromRow)]
-pub struct UserLoginInfo {
-    pub id: Uuid,
-    pub password_hash: String,
-    pub role: PlatformRole,
-}
+use crate::{
+    error::ProblemDetails,
+    platform::{domain::PlatformUser, error::GetUserError},
+    util::password,
+};
 
 pub async fn login(
     pool: &PgPool,
     email: &str,
     password: &str,
-) -> Result<UserLoginInfo, LoginError> {
+) -> Result<PlatformUserCredentials, LoginError> {
     let user = sqlx::query_as!(
-        UserLoginInfo, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
+        PlatformUserCredentials, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
         r#"SELECT id, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
         email
     )
@@ -136,4 +133,24 @@ async fn owner_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
             .await?
             .unwrap_or(false);
     Ok(res)
+}
+
+pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<PlatformUser, GetUserError> {
+    let user = sqlx::query_as!(
+        PlatformUser,
+        r#"
+        SELECT
+            id,
+            email,
+            role as "role: _",
+            created_at,
+            updated_at
+        FROM platform_user
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_optional(pool)
+    .await?;
+    user.ok_or(GetUserError::NotFound)
 }

@@ -1,6 +1,8 @@
 pub mod api {
     pub use super::domain::PlatformRole;
-    pub use super::dto::{CreateUserRequest, CreateUserResponse, LoginRequest, LoginResponse};
+    pub use super::dto::{
+        CreateUserRequest, CreateUserResponse, LoginRequest, LoginResponse, MeResponse,
+    };
 }
 
 pub(crate) mod handler;

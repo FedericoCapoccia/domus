@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use time::OffsetDateTime;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, sqlx::Type, Deserialize)]
 #[sqlx(type_name = "platform_user_role", rename_all = "lowercase")]
@@ -18,4 +20,20 @@ impl fmt::Display for PlatformRole {
             Self::User => f.write_str("user"),
         }
     }
+}
+
+#[derive(sqlx::FromRow)]
+pub struct PlatformUserCredentials {
+    pub id: Uuid,
+    pub password_hash: String,
+    pub role: PlatformRole,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct PlatformUser {
+    pub id: Uuid,
+    pub email: String,
+    pub role: PlatformRole,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }

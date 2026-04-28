@@ -98,6 +98,32 @@ pub enum BootstrapError {
     CreateFailed,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum GetUserError {
+    #[error("User not found")]
+    NotFound,
+    #[error("Database error")]
+    Database(#[from] sqlx::Error),
+}
+
+impl From<GetUserError> for ProblemDetails {
+    fn from(err: GetUserError) -> Self {
+        match &err {
+            GetUserError::NotFound => {
+                ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
+            }
+            GetUserError::Database(internal) => {
+                tracing::error!(
+                    error = %err,
+                    internal = ?internal,
+                    "get user failed"
+                );
+                ProblemDetails::internal_error()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use axum::{http::StatusCode, response::IntoResponse};

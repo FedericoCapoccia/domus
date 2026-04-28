@@ -1,7 +1,8 @@
 pub mod api {
     pub mod platform {
         pub use crate::platform::api::{
-            CreateUserRequest, CreateUserResponse, LoginRequest, LoginResponse, PlatformRole,
+            CreateUserRequest, CreateUserResponse, LoginRequest, LoginResponse, MeResponse,
+            PlatformRole,
         };
     }
 }
