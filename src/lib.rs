@@ -7,7 +7,9 @@ pub mod api {
 }
 
 pub mod jwt {
-    pub use crate::auth::jwt::{ClaimData, Claims, JwtError, install_crypto_provider, verify};
+    pub use crate::auth::jwt::{
+        ClaimData, Claims, JwtError, generate, install_crypto_provider, verify,
+    };
 }
 
 pub mod password {
@@ -76,7 +78,7 @@ pub async fn run() -> anyhow::Result<()> {
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
-        .nest("/api/v1/platform", platform::handler::router())
+        .nest("/api/v1/platform", platform::handler::router(state.clone()))
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

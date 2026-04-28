@@ -29,6 +29,7 @@ pub struct CreateUserRequest {
     pub email: String,
     #[validate(length(min = 8, max = 128))]
     pub password: String,
+    pub role: PlatformRole,
 }
 
 #[derive(Serialize, Deserialize)]

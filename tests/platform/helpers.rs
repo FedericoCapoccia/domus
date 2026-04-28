@@ -3,7 +3,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, Response, header},
 };
-use domus::{AppState, build_router, jwt, password};
+use domus::{AppState, api::platform::PlatformRole, build_router, jwt, password};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -38,15 +38,16 @@ pub async fn seed_platform_user(pool: &PgPool, email: &str, password: &str, role
     .unwrap()
 }
 
-pub async fn login(app: &mut axum::Router, body: &str) -> Response<Body> {
-    app.oneshot(json_request("POST", "/api/v1/platform/login", None, body))
-        .await
-        .unwrap()
+pub fn platform_token(user_id: Uuid, role: PlatformRole) -> String {
+    jwt::generate(
+        &jwt::Claims::platform(user_id, role),
+        &EncodingKey::from_secret(JWT_SECRET),
+    )
+    .unwrap()
 }
 
-// FIXME: remove this once I have an auth middleware and enforce JWT
-pub async fn register(app: &mut axum::Router, body: &str) -> Response<Body> {
-    app.oneshot(json_request("POST", "/api/v1/platform/users", None, body))
+pub async fn login(app: &mut axum::Router, body: &str) -> Response<Body> {
+    app.oneshot(json_request("POST", "/api/v1/platform/login", None, body))
         .await
         .unwrap()
 }
@@ -60,6 +61,12 @@ pub async fn register_authed(app: &mut axum::Router, token: &str, body: &str) ->
     ))
     .await
     .unwrap()
+}
+
+pub async fn register_without_token(app: &mut axum::Router, body: &str) -> Response<Body> {
+    app.oneshot(json_request("POST", "/api/v1/platform/users", None, body))
+        .await
+        .unwrap()
 }
 
 fn json_request(method: &str, path: &str, token: Option<&str>, body: &str) -> Request<Body> {

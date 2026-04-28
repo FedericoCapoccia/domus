@@ -68,9 +68,7 @@ pub fn verify(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JwtErro
 
 pub fn install_crypto_provider() {
     INSTALL_PROVIDER.call_once(|| {
-        jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
-            .install_default()
-            .expect("failed to install JWT crypto provider");
+        let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
     });
 }
 

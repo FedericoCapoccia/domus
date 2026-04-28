@@ -12,10 +12,12 @@ Content-Type: application/json
 ### Register
 POST http://localhost:3000/api/v1/platform/users
 Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMTlkZDM3NC0yZTcwLTdhNmEtOGNjYy05YTZhNjllM2ViYzEiLCJpc3MiOiJkb211cyIsImlhdCI6MTc3NzM3MjA3OSwibmJmIjoxNzc3MzcyMDc5LCJleHAiOjE3NzczNzI5NzksImtpbmQiOiJwbGF0Zm9ybSIsInJvbGUiOiJvd25lciJ9.enrYHsFO12jcHEMb3sqB19zJiVvCTYArLA1jrOAkB6E
 
 {
-  "email": "Federico@example.com",
-  "password": "adminadmin"
+  "email": "Federico2@example.com",
+  "password": "adminadmin",
+  "role": "user"
 }
 
 ###

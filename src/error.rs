@@ -60,6 +60,10 @@ impl ProblemDetails {
         problem
     }
 
+    pub fn forbidden(detail: String) -> Self {
+        Self::new(StatusCode::FORBIDDEN, "Forbidden".into(), detail, None)
+    }
+
     pub fn internal_error() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,

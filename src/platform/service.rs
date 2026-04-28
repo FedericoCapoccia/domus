@@ -97,6 +97,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
             .to_lowercase(),
         password: std::env::var("PLATFORM_OWNER_PASSWORD")
             .map_err(|_| BootstrapError::MissingPassword)?,
+        role: PlatformRole::Owner,
     };
 
     if let Err(err) = req.validate() {
@@ -110,7 +111,7 @@ pub async fn ensure_owner(pool: &PgPool) -> Result<(), BootstrapError> {
 
     tracing::info!("No platform owner found, creating from environment");
 
-    match create_user(pool, &req.email, &req.password, PlatformRole::Owner).await {
+    match create_user(pool, &req.email, &req.password, req.role).await {
         Ok(_) => {
             tracing::info!("Created platform owner");
             Ok(())
