@@ -6,6 +6,7 @@ use super::{
     domain::{PlatformRole, PlatformUserCredentials},
     dto::{CreateUserRequest, CreateUserResponse},
     error::{BootstrapError, CreateUserError, LoginError},
+    query,
 };
 use crate::{
     error::ProblemDetails,
@@ -18,14 +19,7 @@ pub async fn login(
     email: &str,
     password: &str,
 ) -> Result<PlatformUserCredentials, LoginError> {
-    let user = sqlx::query_as!(
-        PlatformUserCredentials, // 'role as "role: _"' is needed because sqlx doesn't have knowledge about user defined types
-        r#"SELECT id, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
-        email
-    )
-    .fetch_optional(pool)
-    .await?;
-
+    let user = query::platform_user_credentials_by_email(pool, email).await?;
     let user = match user {
         Some(user) => user,
         None => {
@@ -52,33 +46,9 @@ pub async fn create_user(
     role: PlatformRole,
 ) -> Result<CreateUserResponse, CreateUserError> {
     let hash = password::hash(password).await?;
-    let result = sqlx::query_as!(
-        CreateUserResponse,
-        r#"
-        INSERT INTO platform_user (email, password_hash, role)
-        VALUES ($1, $2, $3)
-        RETURNING id, role as "role: _", created_at
-        "#,
-        email,
-        hash,
-        role as PlatformRole,
-    )
-    .fetch_one(pool)
-    .await;
-
-    match result {
-        Ok(user) => Ok(user),
-        Err(sqlx::Error::Database(db_err)) => {
-            if db_err.constraint() == Some("platform_user_email_unique") {
-                Err(CreateUserError::EmailExists)
-            } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
-                Err(CreateUserError::OwnerExists)
-            } else {
-                Err(CreateUserError::Database(sqlx::Error::Database(db_err)))
-            }
-        }
-        Err(err) => Err(CreateUserError::Database(err)),
-    }
+    query::insert_platform_user(pool, email, &hash, role)
+        .await
+        .map_err(map_create_user_error)
 }
 
 pub async fn ensure_owner(
@@ -86,8 +56,12 @@ pub async fn ensure_owner(
     owner_email: Option<&str>,
     owner_password: Option<&str>,
 ) -> Result<(), BootstrapError> {
-    if owner_exists(pool).await? {
+    let mut tx = pool.begin().await?;
+    query::acquire_platform_bootstrap_lock(&mut *tx).await?;
+
+    if query::owner_exists(&mut *tx).await? {
         tracing::info!("Platform owner exists, skipping bootstrap");
+        tx.commit().await?;
         return Ok(());
     }
 
@@ -113,51 +87,43 @@ pub async fn ensure_owner(
 
     tracing::info!("No platform owner found, creating from environment");
 
-    match create_user(pool, &req.email, &req.password, req.role).await {
+    let hash = password::hash(&req.password)
+        .await
+        .map_err(|_| BootstrapError::CreateFailed)?;
+
+    // The query returns a CreateUserError but I want BootstrapError
+    match query::insert_platform_user(&mut *tx, &req.email, &hash, req.role)
+        .await
+        .map_err(map_create_user_error)
+    {
         Ok(_) => {
             tracing::info!("Created platform owner");
+            tx.commit().await?;
             Ok(())
         }
-        Err(CreateUserError::OwnerExists | CreateUserError::EmailExists) => {
-            // This is more of a safeguard
-            if owner_exists(pool).await? {
-                tracing::warn!("Platform owner was created concurrently, continuing startup");
-                Ok(())
-            } else {
-                Err(BootstrapError::CreateFailed)
-            }
-        }
+        Err(CreateUserError::EmailExists) => Err(BootstrapError::EmailExists),
         Err(_) => Err(BootstrapError::CreateFailed),
     }
 }
 
-async fn owner_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
-    let res =
-        sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM platform_user WHERE role = 'owner')")
-            .fetch_one(pool)
-            .await?
-            .unwrap_or(false);
-    Ok(res)
+pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<PlatformUser, GetUserError> {
+    let user = query::platform_user_by_id(pool, id).await?;
+    user.ok_or(GetUserError::NotFound)
 }
 
-pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<PlatformUser, GetUserError> {
-    let user = sqlx::query_as!(
-        PlatformUser,
-        r#"
-        SELECT
-            id,
-            email,
-            role as "role: _",
-            created_at,
-            updated_at
-        FROM platform_user
-        WHERE id = $1
-        "#,
-        id
-    )
-    .fetch_optional(pool)
-    .await?;
-    user.ok_or(GetUserError::NotFound)
+fn map_create_user_error(err: sqlx::Error) -> CreateUserError {
+    match err {
+        sqlx::Error::Database(db_err) => {
+            if db_err.constraint() == Some("platform_user_email_unique") {
+                CreateUserError::EmailExists
+            } else if db_err.constraint() == Some("platform_user_single_owner_idx") {
+                CreateUserError::OwnerExists
+            } else {
+                CreateUserError::Database(sqlx::Error::Database(db_err))
+            }
+        }
+        err => CreateUserError::Database(err),
+    }
 }
 
 #[cfg(test)]
@@ -217,6 +183,23 @@ mod tests {
         assert_eq!(owner.0, "owner@example.com");
         assert_eq!(owner.1, "owner");
         assert_eq!(owner_count(&pool).await, 1);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn ensure_owner_returns_email_exists_when_bootstrap_email_belongs_to_user(pool: PgPool) {
+        create_user(
+            &pool,
+            "owner@example.com",
+            TEST_PASSWORD,
+            PlatformRole::User,
+        )
+        .await
+        .unwrap();
+
+        let result = ensure_owner(&pool, Some("owner@example.com"), Some(TEST_PASSWORD)).await;
+
+        assert!(matches!(result, Err(BootstrapError::EmailExists)));
+        assert_eq!(owner_count(&pool).await, 0);
     }
 
     #[sqlx::test(migrations = "./migrations")]

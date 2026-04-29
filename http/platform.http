@@ -3,8 +3,8 @@ POST http://localhost:3000/api/v1/platform/login
 Content-Type: application/json
 
 {
-  "email": "federico@example.com",
-  "password": "password"
+  "email": "admin@admin",
+  "password": "adminadmin"
 }
 
 > {%
@@ -19,7 +19,7 @@ Content-Type: application/json
 Authorization: Bearer {{jwt}}
 
 {
-  "email": "Federico@example.com",
+  "email": "admin@admin",
   "password": "password",
   "role": "user"
 }

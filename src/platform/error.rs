@@ -94,6 +94,8 @@ pub enum BootstrapError {
     Validation,
     #[error("Database error")]
     Database(#[from] sqlx::Error),
+    #[error("PLATFORM_OWNER_EMAIL already belongs to an existing user")]
+    EmailExists,
     #[error("Failed to create owner")]
     CreateFailed,
 }

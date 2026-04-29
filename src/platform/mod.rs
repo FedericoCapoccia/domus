@@ -11,3 +11,4 @@ pub(crate) mod service;
 mod domain;
 mod dto;
 mod error;
+mod query;
