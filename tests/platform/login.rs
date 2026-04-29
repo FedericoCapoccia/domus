@@ -77,7 +77,7 @@ async fn login_normalizes_email(pool: PgPool) {
     let mut app = helpers::app(pool);
 
     let body = serde_json::json!({
-        "email": "USER@example.COM",
+        "email": "  USER@example.COM ",
         "password": TEST_PASSWORD,
     })
     .to_string();

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18
     container_name: domus-pg
     restart: unless-stopped
     environment:
@@ -12,9 +12,13 @@ services:
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
     volumes:
-      - domus-pgdata:/var/lib/postgresql/data
+      - domus-pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -p \"$${POSTGRES_PORT:-5432}\""]
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -p "$${POSTGRES_PORT:-5432}"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

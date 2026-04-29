@@ -72,7 +72,7 @@ pub async fn ensure_owner(
         email: owner_email
             .ok_or(BootstrapError::MissingEmail)?
             .trim()
-            .to_lowercase(),
+            .to_string(),
         password: owner_password
             .ok_or(BootstrapError::MissingPassword)?
             .to_string(),
@@ -140,16 +140,13 @@ mod tests {
     #[sqlx::test(migrations = "./migrations")]
     async fn ensure_owner_skips_bootstrap_when_owner_exists(pool: PgPool) {
         seed_owner(&pool, "owner@example.com").await;
-
         ensure_owner(&pool, None, None).await.unwrap();
-
         assert_eq!(owner_count(&pool).await, 1);
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn ensure_owner_returns_missing_email_when_no_owner_and_email_absent(pool: PgPool) {
         let result = ensure_owner(&pool, None, Some(TEST_PASSWORD)).await;
-
         assert!(matches!(result, Err(BootstrapError::MissingEmail)));
         assert_eq!(owner_count(&pool).await, 0);
     }
@@ -157,7 +154,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations")]
     async fn ensure_owner_returns_missing_password_when_no_owner_and_password_absent(pool: PgPool) {
         let result = ensure_owner(&pool, Some("owner@example.com"), None).await;
-
         assert!(matches!(result, Err(BootstrapError::MissingPassword)));
         assert_eq!(owner_count(&pool).await, 0);
     }
@@ -165,14 +161,13 @@ mod tests {
     #[sqlx::test(migrations = "./migrations")]
     async fn ensure_owner_returns_validation_error_for_invalid_owner_config(pool: PgPool) {
         let result = ensure_owner(&pool, Some("not-an-email"), Some("short")).await;
-
         assert!(matches!(result, Err(BootstrapError::Validation)));
         assert_eq!(owner_count(&pool).await, 0);
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn ensure_owner_creates_owner_from_bootstrap_config(pool: PgPool) {
-        ensure_owner(&pool, Some(" OWNER@example.COM "), Some(TEST_PASSWORD))
+        ensure_owner(&pool, Some(" owner@example.com "), Some(TEST_PASSWORD))
             .await
             .unwrap();
 

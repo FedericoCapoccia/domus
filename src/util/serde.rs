@@ -5,5 +5,5 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    Ok(s.trim().to_lowercase())
+    Ok(s.trim().to_owned())
 }
