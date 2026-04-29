@@ -51,6 +51,9 @@ pub async fn create_user(
         .map_err(map_create_user_error)
 }
 
+// Currently I hash the password while locking the db lock. Not ideal but right now it feels like
+// the better solution, otherwise I'd need to validate EMAIL and PASSWORD before acquiring it
+// hurting the flexibility of bootstrap that I want (credentials not needed if DB is already seeded)
 pub async fn ensure_owner(
     pool: &PgPool,
     owner_email: Option<&str>,
