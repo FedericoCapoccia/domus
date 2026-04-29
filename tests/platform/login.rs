@@ -85,27 +85,3 @@ async fn login_normalizes_email(pool: PgPool) {
 
     assert_eq!(res.status(), StatusCode::OK);
 }
-
-#[sqlx::test(migrations = "./migrations")]
-async fn login_rejects_invalid_requests(pool: PgPool) {
-    let mut app = helpers::app(pool);
-    for body in [
-        serde_json::json!({
-            "email": "not-an-email",
-            "password": TEST_PASSWORD,
-        }),
-        serde_json::json!({
-            "email": TEST_EMAIL,
-            "password": "short",
-        }),
-        serde_json::json!({
-            "email": TEST_EMAIL,
-            "password": TEST_PASSWORD,
-            "role": "owner",
-        }),
-    ] {
-        let body = body.to_string();
-        let response = helpers::login(&mut app, &body).await;
-        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    }
-}

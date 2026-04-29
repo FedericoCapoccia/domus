@@ -2,7 +2,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // TODO: add graceful shutdown and explicitly close pool https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#note-drop-behavior
 // TODO: add rate limiting on /login
-// TODO: add auth middleware
 // TODO: TLS for postgres
 // TODO: TLS or proxy
 #[tokio::main]

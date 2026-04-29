@@ -39,7 +39,7 @@ impl Claims {
             data: ClaimData::Platform { role },
         }
     }
-    fn tenant(sub: Uuid, tenant_slug: String) -> Self {
+    pub fn tenant(sub: Uuid, tenant_slug: String) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
 
         Self {

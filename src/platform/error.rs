@@ -129,23 +129,71 @@ mod tests {
     use axum::{http::StatusCode, response::IntoResponse};
 
     use super::*;
+    use crate::util::password::{PasswordHashError, PasswordVerifyError};
 
     #[test]
     fn user_not_found_maps_to_unauthorized_problem() {
-        let response = ProblemDetails::from(LoginError::UserNotFound).into_response();
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_problem_status(
+            ProblemDetails::from(LoginError::UserNotFound),
+            StatusCode::UNAUTHORIZED,
+        );
     }
 
     #[test]
     fn password_mismatch_maps_to_unauthorized_problem() {
-        let response = ProblemDetails::from(LoginError::PasswordMismatch).into_response();
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_problem_status(
+            ProblemDetails::from(LoginError::PasswordMismatch),
+            StatusCode::UNAUTHORIZED,
+        );
+    }
+
+    #[test]
+    fn login_internal_errors_map_to_internal_server_error_problem() {
+        for problem in [
+            ProblemDetails::from(LoginError::Database(sqlx::Error::RowNotFound)),
+            ProblemDetails::from(LoginError::VerifyError(PasswordVerifyError::Parse(
+                "invalid hash".into(),
+            ))),
+        ] {
+            assert_problem_status(problem, StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 
     #[test]
     fn email_exists_maps_to_conflict_problem() {
-        let response = ProblemDetails::from(CreateUserError::EmailExists).into_response();
+        assert_problem_status(
+            ProblemDetails::from(CreateUserError::EmailExists),
+            StatusCode::CONFLICT,
+        );
+    }
 
-        assert_eq!(response.status(), StatusCode::CONFLICT);
+    #[test]
+    fn create_user_internal_errors_map_to_internal_server_error_problem() {
+        for problem in [
+            ProblemDetails::from(CreateUserError::OwnerExists),
+            ProblemDetails::from(CreateUserError::HashingError(PasswordHashError::Hash(
+                "hash failed".into(),
+            ))),
+            ProblemDetails::from(CreateUserError::Database(sqlx::Error::RowNotFound)),
+        ] {
+            assert_problem_status(problem, StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[test]
+    fn get_user_errors_map_to_expected_problem_statuses() {
+        assert_problem_status(
+            ProblemDetails::from(GetUserError::NotFound),
+            StatusCode::UNAUTHORIZED,
+        );
+        assert_problem_status(
+            ProblemDetails::from(GetUserError::Database(sqlx::Error::RowNotFound)),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        );
+    }
+
+    fn assert_problem_status(problem: ProblemDetails, status: StatusCode) {
+        let response = problem.into_response();
+        assert_eq!(response.status(), status);
     }
 }

@@ -66,7 +66,15 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     sqlx::migrate!().run(&state.pool).await?;
-    ensure_owner(&state.pool).await?;
+
+    let owner_email = non_empty_env("PLATFORM_OWNER_EMAIL");
+    let owner_password = non_empty_env("PLATFORM_OWNER_PASSWORD");
+    ensure_owner(
+        &state.pool,
+        owner_email.as_deref(),
+        owner_password.as_deref(),
+    )
+    .await?;
 
     let router = build_router(state);
     let bind_addr = format!("0.0.0.0:{}", env_u16("DOMUS_PORT", 3000)?);
@@ -83,6 +91,12 @@ pub fn build_router(state: AppState) -> Router {
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn env_u16(name: &str, default: u16) -> anyhow::Result<u16> {

@@ -62,3 +62,92 @@ impl From<PlatformUser> for MeResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn login_request_rejects_invalid_email() {
+        let req = LoginRequest {
+            email: "not-an-email".into(),
+            ..valid_login_request()
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn login_request_rejects_short_password() {
+        let req = LoginRequest {
+            password: "short".into(),
+            ..valid_login_request()
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn login_request_rejects_unknown_fields() {
+        let result = serde_json::from_value::<LoginRequest>(serde_json::json!({
+            "email": "user@example.com",
+            "password": "password123",
+            "role": "owner",
+        }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_user_request_rejects_invalid_email() {
+        let req = CreateUserRequest {
+            email: "not-an-email".into(),
+            ..valid_create_user_request()
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn create_user_request_rejects_short_password() {
+        let req = CreateUserRequest {
+            password: "short".into(),
+            ..valid_create_user_request()
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn create_user_request_rejects_unknown_fields() {
+        let result = serde_json::from_value::<CreateUserRequest>(serde_json::json!({
+            "email": "user@example.com",
+            "password": "password123",
+            "role": "user",
+            "foo": "bar",
+        }));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_user_request_rejects_unknown_role() {
+        let result = serde_json::from_value::<CreateUserRequest>(serde_json::json!({
+            "email": "user@example.com",
+            "password": "password123",
+            "role": "random-role",
+        }));
+
+        assert!(result.is_err());
+    }
+
+    fn valid_login_request() -> LoginRequest {
+        LoginRequest {
+            email: "user@example.com".into(),
+            password: "password123".into(),
+        }
+    }
+
+    fn valid_create_user_request() -> CreateUserRequest {
+        CreateUserRequest {
+            email: "user@example.com".into(),
+            password: "password123".into(),
+            role: PlatformRole::User,
+        }
+    }
+}

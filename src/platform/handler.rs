@@ -63,24 +63,26 @@ async fn register(
     Extension(auth): Extension<PlatformAuth>,
     ValidatedJson(req): ValidatedJson<CreateUserRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    match (auth.role, req.role) {
-        (PlatformRole::Owner, PlatformRole::Admin | PlatformRole::User) => {}
-        (PlatformRole::Admin, PlatformRole::User) => {}
-        (PlatformRole::Owner, PlatformRole::Owner) => {
-            return Err(ProblemDetails::forbidden(
-                "Cannot create a user with role=owner".into(),
-            ));
-        }
-        _ => {
-            return Err(ProblemDetails::forbidden(format!(
-                "Insufficient permissions to create a user with role={0}",
-                req.role
-            )));
-        }
-    }
+    authorize_create_user(auth.role, req.role)?;
 
     let created = service::create_user(&state.pool, &req.email, &req.password, req.role).await?;
     Ok((StatusCode::CREATED, Json(created)))
+}
+
+fn authorize_create_user(
+    actor_role: PlatformRole,
+    target_role: PlatformRole,
+) -> Result<(), ProblemDetails> {
+    match (actor_role, target_role) {
+        (PlatformRole::Owner, PlatformRole::Admin | PlatformRole::User) => Ok(()),
+        (PlatformRole::Admin, PlatformRole::User) => Ok(()),
+        (PlatformRole::Owner, PlatformRole::Owner) => Err(ProblemDetails::forbidden(
+            "Cannot create a user with role=owner".into(),
+        )),
+        _ => Err(ProblemDetails::forbidden(format!(
+            "Insufficient permissions to create a user with role={target_role}"
+        ))),
+    }
 }
 
 async fn get_authenticated_user(
@@ -89,4 +91,60 @@ async fn get_authenticated_user(
 ) -> Result<impl IntoResponse, ProblemDetails> {
     let user = service::get_user_by_id(&state.pool, auth.user_id).await?;
     Ok((StatusCode::OK, Json(MeResponse::from(user))))
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{http::StatusCode, response::IntoResponse};
+
+    use super::*;
+
+    #[test]
+    fn create_user_authorization_matches_role_matrix() {
+        for (actor_role, target_role, expected_status) in [
+            (
+                PlatformRole::Owner,
+                PlatformRole::Owner,
+                StatusCode::FORBIDDEN,
+            ),
+            (PlatformRole::Owner, PlatformRole::Admin, StatusCode::OK),
+            (PlatformRole::Owner, PlatformRole::User, StatusCode::OK),
+            (
+                PlatformRole::Admin,
+                PlatformRole::Owner,
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                PlatformRole::Admin,
+                PlatformRole::Admin,
+                StatusCode::FORBIDDEN,
+            ),
+            (PlatformRole::Admin, PlatformRole::User, StatusCode::OK),
+            (
+                PlatformRole::User,
+                PlatformRole::Owner,
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                PlatformRole::User,
+                PlatformRole::Admin,
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                PlatformRole::User,
+                PlatformRole::User,
+                StatusCode::FORBIDDEN,
+            ),
+        ] {
+            let result = authorize_create_user(actor_role, target_role);
+            let status = result
+                .map(|_| StatusCode::OK)
+                .unwrap_or_else(|problem| problem.into_response().status());
+
+            assert_eq!(
+                status, expected_status,
+                "actor_role={actor_role}, target_role={target_role}"
+            );
+        }
+    }
 }

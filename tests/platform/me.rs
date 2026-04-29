@@ -1,4 +1,7 @@
-use axum::http::{StatusCode, header};
+use axum::{
+    body::Body,
+    http::{Response, StatusCode, header},
+};
 use domus::api::platform::{MeResponse, PlatformRole};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -14,7 +17,7 @@ async fn me_returns_current_user(pool: PgPool) {
     let token = helpers::platform_token(user_id, PlatformRole::Admin);
     let mut app = helpers::app(pool);
 
-    let res = helpers::me_authed(&mut app, &token).await;
+    let res = helpers::me(&mut app, &token).await;
 
     assert_eq!(res.status(), StatusCode::OK);
 
@@ -25,49 +28,20 @@ async fn me_returns_current_user(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn me_without_token_returns_401(pool: PgPool) {
-    let mut app = helpers::app(pool);
-
-    let res = helpers::me_without_token(&mut app).await;
-
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        res.headers()
-            .get(header::WWW_AUTHENTICATE)
-            .unwrap()
-            .to_str()
-            .unwrap(),
-        "Bearer"
-    );
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn me_with_invalid_token_returns_401(pool: PgPool) {
-    let mut app = helpers::app(pool);
-
-    let res = helpers::me_authed(&mut app, "not-a-valid-jwt").await;
-
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        res.headers()
-            .get(header::WWW_AUTHENTICATE)
-            .unwrap()
-            .to_str()
-            .unwrap(),
-        "Bearer"
-    );
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn me_with_token_for_missing_user_returns_401(pool: PgPool) {
+async fn me_for_missing_user_returns_401(pool: PgPool) {
     let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::Admin);
     let mut app = helpers::app(pool);
 
-    let res = helpers::me_authed(&mut app, &token).await;
+    let res = helpers::me(&mut app, &token).await;
 
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    assert_bearer_unauthorized(res);
+}
+
+fn assert_bearer_unauthorized(response: Response<Body>) {
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
-        res.headers()
+        response
+            .headers()
             .get(header::WWW_AUTHENTICATE)
             .unwrap()
             .to_str()
