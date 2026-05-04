@@ -2,7 +2,7 @@ use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
 use super::{
-    domain::{PlatformRole, PlatformUser, PlatformUserCredentials},
+    domain::{PlatformRole, PlatformStatus, PlatformUser, PlatformUserCredentials},
     dto::CreateUserResponse,
 };
 
@@ -18,7 +18,14 @@ where
 {
     sqlx::query_as!(
         PlatformUserCredentials,
-        r#"SELECT id, password_hash FROM platform_user WHERE email = $1"#,
+        r#"
+        SELECT
+            id,
+            password_hash,
+            status as "status: _"
+        FROM platform_user
+        WHERE email = $1
+        "#,
         email
     )
     .fetch_optional(executor)
@@ -75,12 +82,37 @@ where
             id,
             email,
             role as "role: _",
+            status as "status: _",
             created_at,
             updated_at
         FROM platform_user
         WHERE id = $1
         "#,
         id
+    )
+    .fetch_optional(executor)
+    .await
+}
+
+pub async fn update_platform_user_status<'e, E>(
+    executor: E,
+    id: Uuid,
+    status: PlatformStatus,
+) -> Result<Option<Uuid>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        UPDATE platform_user
+        SET
+            status = $2,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING id
+        "#,
+        id,
+        status as PlatformStatus,
     )
     .fetch_optional(executor)
     .await

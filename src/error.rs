@@ -64,6 +64,10 @@ impl ProblemDetails {
         Self::new(StatusCode::FORBIDDEN, "Forbidden".into(), detail, None)
     }
 
+    pub fn not_found(detail: String) -> Self {
+        Self::new(StatusCode::NOT_FOUND, "Not Found".into(), detail, None)
+    }
+
     pub fn internal_error() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,

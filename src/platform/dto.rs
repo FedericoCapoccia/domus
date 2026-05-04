@@ -3,8 +3,8 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 use validator::Validate;
 
-use super::domain::PlatformRole;
-use crate::{platform::domain::PlatformUser, util::serde::deserialize_normalized_email};
+use super::domain::{PlatformRole, PlatformStatus, PlatformUser};
+use crate::util::serde::deserialize_normalized_email;
 
 #[derive(Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -45,6 +45,7 @@ pub struct MeResponse {
     pub id: Uuid,
     pub email: String,
     pub role: PlatformRole,
+    pub status: PlatformStatus,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -57,6 +58,7 @@ impl From<PlatformUser> for MeResponse {
             id: value.id,
             email: value.email,
             role: value.role,
+            status: value.status,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

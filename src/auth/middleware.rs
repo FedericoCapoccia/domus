@@ -5,7 +5,11 @@ use axum::{
 };
 
 use super::jwt::{self, ClaimData};
-use crate::{AppState, error::ProblemDetails, platform::service};
+use crate::{
+    AppState,
+    error::ProblemDetails,
+    platform::{api::PlatformStatus, error::GetUserError, service},
+};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -26,7 +30,29 @@ pub async fn require_platform_auth(
             "Invalid or missing access token".into(),
         ));
     };
-    let user = service::get_user_by_id(&state.pool, claims.sub).await?;
+
+    let user = match service::get_user_by_id(&state.pool, claims.sub).await {
+        Ok(target) => target,
+        Err(GetUserError::NotFound) => {
+            return Err(ProblemDetails::bearer_unauthorized(
+                "Invalid or missing access token".into(),
+            ));
+        }
+        Err(GetUserError::Database(internal)) => {
+            tracing::error!(
+                internal = ?internal,
+                "auth user lookup failed"
+            );
+            return Err(ProblemDetails::internal_error());
+        }
+    };
+
+    if user.status != PlatformStatus::Active {
+        return Err(ProblemDetails::bearer_unauthorized(
+            "Invalid or missing access token".into(),
+        ));
+    }
+
     req.extensions_mut().insert(user);
     Ok(next.run(req).await)
 }

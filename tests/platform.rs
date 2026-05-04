@@ -3,4 +3,5 @@ mod platform {
     mod login;
     mod me;
     mod register;
+    mod status;
 }

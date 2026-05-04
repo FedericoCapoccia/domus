@@ -9,6 +9,8 @@ pub enum LoginError {
     UserNotFound,
     #[error("Password does not match")]
     PasswordMismatch,
+    #[error("User is not active")]
+    UserInactive,
     #[error("Password verification failed")]
     VerifyError(#[from] PasswordVerifyError),
     #[error("Database error")]
@@ -34,7 +36,7 @@ impl From<LoginError> for ProblemDetails {
                 );
                 ProblemDetails::internal_error()
             }
-            LoginError::UserNotFound | LoginError::PasswordMismatch => {
+            LoginError::UserNotFound | LoginError::PasswordMismatch | LoginError::UserInactive => {
                 ProblemDetails::unauthorized("Invalid credentials".into())
             }
         }
@@ -108,17 +110,23 @@ pub enum GetUserError {
     Database(#[from] sqlx::Error),
 }
 
-impl From<GetUserError> for ProblemDetails {
-    fn from(err: GetUserError) -> Self {
+#[derive(Debug, thiserror::Error)]
+pub enum SetUserStatusError {
+    #[error("User not found")]
+    UserNotFound,
+    #[error("Database error")]
+    Database(#[from] sqlx::Error),
+}
+
+impl From<SetUserStatusError> for ProblemDetails {
+    fn from(err: SetUserStatusError) -> Self {
         match &err {
-            GetUserError::NotFound => {
-                ProblemDetails::bearer_unauthorized("Invalid or missing access token".into())
-            }
-            GetUserError::Database(internal) => {
+            SetUserStatusError::UserNotFound => ProblemDetails::not_found("User not found".into()),
+            SetUserStatusError::Database(internal) => {
                 tracing::error!(
                     error = %err,
                     internal = ?internal,
-                    "get user failed"
+                    "set platform user status failed"
                 );
                 ProblemDetails::internal_error()
             }
@@ -180,18 +188,6 @@ mod tests {
         ] {
             assert_problem_status(problem, StatusCode::INTERNAL_SERVER_ERROR);
         }
-    }
-
-    #[test]
-    fn get_user_errors_map_to_expected_problem_statuses() {
-        assert_problem_status(
-            ProblemDetails::from(GetUserError::NotFound),
-            StatusCode::UNAUTHORIZED,
-        );
-        assert_problem_status(
-            ProblemDetails::from(GetUserError::Database(sqlx::Error::RowNotFound)),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        );
     }
 
     fn assert_problem_status(problem: ProblemDetails, status: StatusCode) {

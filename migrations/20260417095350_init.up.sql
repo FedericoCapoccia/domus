@@ -1,4 +1,5 @@
 CREATE TYPE platform_user_role AS ENUM ('owner', 'admin', 'user');
+CREATE TYPE platform_user_status AS ENUM ('active', 'disabled', 'locked');
 
 CREATE COLLATION email_ci (
     provider = icu,
@@ -11,6 +12,7 @@ CREATE TABLE platform_user (
 	email text COLLATE email_ci NOT NULL,
 	password_hash text NOT NULL,
     role platform_user_role NOT NULL DEFAULT 'user',
+    status platform_user_status NOT NULL DEFAULT 'active',
 	created_at timestamptz DEFAULT now() NOT NULL,
 	updated_at timestamptz DEFAULT now() NOT NULL,
 	CONSTRAINT platform_user_email_unique UNIQUE(email),

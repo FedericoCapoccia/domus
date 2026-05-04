@@ -3,14 +3,14 @@ use uuid::Uuid;
 use validator::Validate;
 
 use super::{
-    domain::{PlatformRole, PlatformUserCredentials},
+    domain::{PlatformRole, PlatformStatus, PlatformUser, PlatformUserCredentials},
     dto::{CreateUserRequest, CreateUserResponse},
     error::{BootstrapError, CreateUserError, LoginError},
     query,
 };
 use crate::{
     error::ProblemDetails,
-    platform::{domain::PlatformUser, error::GetUserError},
+    platform::error::{GetUserError, SetUserStatusError},
     util::password,
 };
 
@@ -34,7 +34,8 @@ pub async fn login(
     };
 
     match password::verify(password, &user.password_hash).await? {
-        true => Ok(user),
+        true if user.status == PlatformStatus::Active => Ok(user),
+        true => Err(LoginError::UserInactive),
         false => Err(LoginError::PasswordMismatch),
     }
 }
@@ -49,6 +50,22 @@ pub async fn create_user(
     query::insert_platform_user(pool, email, &hash, role)
         .await
         .map_err(map_create_user_error)
+}
+
+pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<PlatformUser, GetUserError> {
+    let user = query::platform_user_by_id(pool, id).await?;
+    user.ok_or(GetUserError::NotFound)
+}
+
+pub async fn set_user_status(
+    pool: &PgPool,
+    id: Uuid,
+    status: PlatformStatus,
+) -> Result<(), SetUserStatusError> {
+    query::update_platform_user_status(pool, id, status)
+        .await?
+        .ok_or(SetUserStatusError::UserNotFound)?;
+    Ok(())
 }
 
 // Currently I hash the password while locking the db lock. Not ideal but right now it feels like
@@ -107,11 +124,6 @@ pub async fn ensure_owner(
         Err(CreateUserError::EmailExists) => Err(BootstrapError::EmailExists),
         Err(_) => Err(BootstrapError::CreateFailed),
     }
-}
-
-pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<PlatformUser, GetUserError> {
-    let user = query::platform_user_by_id(pool, id).await?;
-    user.ok_or(GetUserError::NotFound)
 }
 
 fn map_create_user_error(err: sqlx::Error) -> CreateUserError {

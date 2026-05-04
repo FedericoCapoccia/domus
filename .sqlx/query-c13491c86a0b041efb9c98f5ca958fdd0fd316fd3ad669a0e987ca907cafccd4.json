@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id,\n            email,\n            role as \"role: _\",\n            created_at,\n            updated_at\n        FROM platform_user\n        WHERE id = $1\n        ",
+  "query": "\n        SELECT\n            id,\n            email,\n            role as \"role: _\",\n            status as \"status: _\",\n            created_at,\n            updated_at\n        FROM platform_user\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -31,11 +31,27 @@
       },
       {
         "ordinal": 3,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "platform_user_status",
+            "kind": {
+              "Enum": [
+                "active",
+                "disabled",
+                "locked"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -50,8 +66,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "a420c536b6de4af35f1f58e63ab35dcf29a1cf201a3a07f745fb3bb228ccfa3d"
+  "hash": "c13491c86a0b041efb9c98f5ca958fdd0fd316fd3ad669a0e987ca907cafccd4"
 }

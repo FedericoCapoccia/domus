@@ -1,51 +1,47 @@
 use axum::{
     body::Body,
-    http::{Response, StatusCode, header},
+    http::{Response, StatusCode},
 };
-use domus::api::platform::{MeResponse, PlatformRole};
+use domus::api::platform::{MeResponse, PlatformRole, PlatformStatus};
 use sqlx::PgPool;
+use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::helpers;
+use super::helpers::{self, TEST_EMAIL, TEST_PASSWORD};
 
-const TEST_PASSWORD: &str = "password123";
-const TEST_EMAIL: &str = "user@example.com";
+async fn endpoint(app: &mut axum::Router, token: &str) -> Response<Body> {
+    app.oneshot(helpers::json_request(
+        "GET",
+        "/api/v1/platform/me",
+        Some(token),
+        "",
+    ))
+    .await
+    .unwrap()
+}
 
 #[sqlx::test(migrations = "./migrations")]
-async fn me_returns_current_user(pool: PgPool) {
-    let user_id = helpers::seed_platform_user(&pool, TEST_EMAIL, TEST_PASSWORD, "admin").await;
+async fn returns_current_user(pool: PgPool) {
+    let user_id =
+        helpers::seed_platform_user(&pool, TEST_EMAIL, TEST_PASSWORD, "admin", "active").await;
     let token = helpers::platform_token(user_id);
     let mut app = helpers::app(pool);
 
-    let res = helpers::me(&mut app, &token).await;
-
+    let res = endpoint(&mut app, &token).await;
     assert_eq!(res.status(), StatusCode::OK);
 
     let body: MeResponse = helpers::json_body(res).await;
     assert_eq!(body.id, user_id);
     assert_eq!(body.email, TEST_EMAIL);
     assert_eq!(body.role, PlatformRole::Admin);
+    assert_eq!(body.status, PlatformStatus::Active);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn me_for_missing_user_returns_401(pool: PgPool) {
+async fn missing_user_returns_401(pool: PgPool) {
     let token = helpers::platform_token(Uuid::now_v7());
     let mut app = helpers::app(pool);
 
-    let res = helpers::me(&mut app, &token).await;
-
-    assert_bearer_unauthorized(res);
-}
-
-fn assert_bearer_unauthorized(response: Response<Body>) {
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        response
-            .headers()
-            .get(header::WWW_AUTHENTICATE)
-            .unwrap()
-            .to_str()
-            .unwrap(),
-        "Bearer"
-    );
+    let res = endpoint(&mut app, &token).await;
+    helpers::assert_bearer_unauthorized(res);
 }

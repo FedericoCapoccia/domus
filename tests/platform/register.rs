@@ -1,16 +1,30 @@
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    http::{Response, StatusCode},
+};
 use domus::api::platform::{CreateUserResponse, PlatformRole};
 use serde_json::json;
 use sqlx::PgPool;
+use tower::ServiceExt;
 
-use super::helpers;
+use super::helpers::{self, TEST_EMAIL, TEST_PASSWORD};
 
-const TEST_PASSWORD: &str = "password123";
-const TEST_EMAIL: &str = "user@example.com";
+async fn endpoint(app: &mut axum::Router, token: &str, body: &str) -> Response<Body> {
+    app.oneshot(helpers::json_request(
+        "POST",
+        "/api/v1/platform/users",
+        Some(token),
+        body,
+    ))
+    .await
+    .unwrap()
+}
 
 #[sqlx::test(migrations = "./migrations")]
-async fn register_returns_201(pool: PgPool) {
-    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+async fn success_returns_201(pool: PgPool) {
+    let id =
+        helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin", "active")
+            .await;
     let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
@@ -20,7 +34,7 @@ async fn register_returns_201(pool: PgPool) {
         "role": PlatformRole::User,
     })
     .to_string();
-    let res = helpers::register(&mut app, &token, &body).await;
+    let res = endpoint(&mut app, &token, &body).await;
 
     assert_eq!(res.status(), StatusCode::CREATED);
 
@@ -29,8 +43,10 @@ async fn register_returns_201(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn register_normalizes_email(pool: PgPool) {
-    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+async fn normalizes_email(pool: PgPool) {
+    let id =
+        helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin", "active")
+            .await;
     let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
@@ -41,7 +57,7 @@ async fn register_normalizes_email(pool: PgPool) {
     })
     .to_string();
 
-    let res = helpers::register(&mut app, &token, &body).await;
+    let res = endpoint(&mut app, &token, &body).await;
     assert_eq!(res.status(), StatusCode::CREATED);
 
     let body = serde_json::json!({
@@ -51,13 +67,15 @@ async fn register_normalizes_email(pool: PgPool) {
     })
     .to_string();
 
-    let res = helpers::register(&mut app, &token, &body).await;
+    let res = endpoint(&mut app, &token, &body).await;
     assert_eq!(res.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn register_duplicate_email_returns_409(pool: PgPool) {
-    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+async fn duplicate_email_returns_409(pool: PgPool) {
+    let id =
+        helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin", "active")
+            .await;
     let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
@@ -68,16 +86,18 @@ async fn register_duplicate_email_returns_409(pool: PgPool) {
     })
     .to_string();
 
-    let res = helpers::register(&mut app, &token, &body).await;
+    let res = endpoint(&mut app, &token, &body).await;
     assert_eq!(res.status(), StatusCode::CREATED);
 
-    let res = helpers::register(&mut app, &token, &body).await;
+    let res = endpoint(&mut app, &token, &body).await;
     assert_eq!(res.status(), StatusCode::CONFLICT);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn register_forbidden_when_actor_lacks_permission(pool: PgPool) {
-    let id = helpers::seed_platform_user(&pool, "actor@example.com", TEST_PASSWORD, "user").await;
+async fn insufficient_permission_returns_403(pool: PgPool) {
+    let id =
+        helpers::seed_platform_user(&pool, "actor@example.com", TEST_PASSWORD, "user", "active")
+            .await;
     let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
     let body = json!({
@@ -87,7 +107,6 @@ async fn register_forbidden_when_actor_lacks_permission(pool: PgPool) {
     })
     .to_string();
 
-    let res = helpers::register(&mut app, &token, &body).await;
-
+    let res = endpoint(&mut app, &token, &body).await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 }

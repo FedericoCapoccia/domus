@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, password_hash, role as \"role: _\" FROM platform_user WHERE email = $1",
+  "query": "\n        SELECT\n            id,\n            password_hash,\n            status as \"status: _\"\n        FROM platform_user\n        WHERE email = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -15,15 +15,15 @@
       },
       {
         "ordinal": 2,
-        "name": "role: _",
+        "name": "status: _",
         "type_info": {
           "Custom": {
-            "name": "platform_user_role",
+            "name": "platform_user_status",
             "kind": {
               "Enum": [
-                "owner",
-                "admin",
-                "user"
+                "active",
+                "disabled",
+                "locked"
               ]
             }
           }
@@ -41,5 +41,5 @@
       false
     ]
   },
-  "hash": "e5e586ea6b4f04cd2fdeb19fedf8173a3478c86a957207b4ca1d5af1b99dd36d"
+  "hash": "ec7f2f8e41c05756a90c43ac49a630f9b0a132b019e927fa648419b4527cd712"
 }
