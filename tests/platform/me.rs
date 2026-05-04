@@ -14,7 +14,7 @@ const TEST_EMAIL: &str = "user@example.com";
 #[sqlx::test(migrations = "./migrations")]
 async fn me_returns_current_user(pool: PgPool) {
     let user_id = helpers::seed_platform_user(&pool, TEST_EMAIL, TEST_PASSWORD, "admin").await;
-    let token = helpers::platform_token(user_id, PlatformRole::Admin);
+    let token = helpers::platform_token(user_id);
     let mut app = helpers::app(pool);
 
     let res = helpers::me(&mut app, &token).await;
@@ -29,7 +29,7 @@ async fn me_returns_current_user(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn me_for_missing_user_returns_401(pool: PgPool) {
-    let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::Admin);
+    let token = helpers::platform_token(Uuid::now_v7());
     let mut app = helpers::app(pool);
 
     let res = helpers::me(&mut app, &token).await;

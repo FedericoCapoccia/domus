@@ -5,13 +5,7 @@ use axum::{
 };
 
 use super::jwt::{self, ClaimData};
-use crate::{AppState, api::platform::PlatformRole, error::ProblemDetails};
-
-#[derive(Clone, Debug)]
-pub struct PlatformAuth {
-    pub user_id: uuid::Uuid,
-    pub role: PlatformRole,
-}
+use crate::{AppState, error::ProblemDetails, platform::service};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -27,15 +21,13 @@ pub async fn require_platform_auth(
 ) -> Result<Response, ProblemDetails> {
     let token = bearer_token(&req)?;
     let claims = jwt::verify(token, &state.decoding_key)?;
-    let ClaimData::Platform { role } = claims.data else {
+    let ClaimData::Platform = claims.data else {
         return Err(ProblemDetails::bearer_unauthorized(
             "Invalid or missing access token".into(),
         ));
     };
-    req.extensions_mut().insert(PlatformAuth {
-        user_id: claims.sub,
-        role,
-    });
+    let user = service::get_user_by_id(&state.pool, claims.sub).await?;
+    req.extensions_mut().insert(user);
     Ok(next.run(req).await)
 }
 
@@ -140,19 +132,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn protected_platform_route_with_platform_token_returns_204() {
-        let user_id = Uuid::now_v7();
-        let token = platform_token(user_id, PlatformRole::Admin);
-
-        let response = protected_platform_app()
-            .oneshot(authorized_request(&token))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    }
-
-    #[tokio::test]
     async fn protected_platform_route_with_tenant_token_returns_401() {
         let token = tenant_token(Uuid::now_v7(), "acme");
 
@@ -179,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn protected_tenant_route_with_platform_token_returns_401() {
-        let token = platform_token(Uuid::now_v7(), PlatformRole::Admin);
+        let token = platform_token(Uuid::now_v7());
 
         let response = protected_tenant_app()
             .oneshot(authorized_request(&token))
@@ -236,8 +215,7 @@ mod tests {
         assert_unauthorized(response);
     }
 
-    async fn platform_handler(Extension(auth): Extension<PlatformAuth>) -> StatusCode {
-        assert_eq!(auth.role, PlatformRole::Admin);
+    async fn platform_handler() -> StatusCode {
         StatusCode::NO_CONTENT
     }
 
@@ -288,9 +266,9 @@ mod tests {
             .unwrap()
     }
 
-    fn platform_token(user_id: Uuid, role: PlatformRole) -> String {
+    fn platform_token(user_id: Uuid) -> String {
         jwt::generate(
-            &jwt::Claims::platform(user_id, role),
+            &jwt::Claims::platform(user_id),
             &EncodingKey::from_secret(JWT_SECRET),
         )
         .unwrap()

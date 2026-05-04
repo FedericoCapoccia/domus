@@ -2,7 +2,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::ProblemDetails, platform::api::PlatformRole};
+use crate::error::ProblemDetails;
 
 const ISSUER: &str = "domus";
 const PLATFORM_ACCESS_TOKEN_TTL: time::Duration = time::Duration::minutes(15);
@@ -11,7 +11,7 @@ static INSTALL_PROVIDER: std::sync::Once = std::sync::Once::new();
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ClaimData {
-    Platform { role: PlatformRole },
+    Platform,
     Tenant { tenant_slug: String },
 }
 
@@ -27,7 +27,7 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn platform(sub: Uuid, role: PlatformRole) -> Self {
+    pub fn platform(sub: Uuid) -> Self {
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
 
         Self {
@@ -36,7 +36,7 @@ impl Claims {
             iat: now,
             nbf: now,
             exp: now + PLATFORM_ACCESS_TOKEN_TTL.whole_seconds(),
-            data: ClaimData::Platform { role },
+            data: ClaimData::Platform,
         }
     }
     pub fn tenant(sub: Uuid, tenant_slug: String) -> Self {
@@ -112,7 +112,7 @@ mod tests {
         let sub = Uuid::now_v7();
         let before = time::OffsetDateTime::now_utc().unix_timestamp();
 
-        let claims = Claims::platform(sub, PlatformRole::Admin);
+        let claims = Claims::platform(sub);
 
         let after = time::OffsetDateTime::now_utc().unix_timestamp();
         assert_eq!(claims.sub, sub);
@@ -121,22 +121,14 @@ mod tests {
         assert!(claims.iat <= after);
         assert_eq!(claims.nbf, claims.iat);
         assert_eq!(claims.exp, claims.iat + 15 * 60);
-        assert!(matches!(
-            claims.data,
-            ClaimData::Platform {
-                role: PlatformRole::Admin
-            }
-        ));
+        assert!(matches!(claims.data, ClaimData::Platform));
     }
 
     #[test]
     fn platform_claims_serialize_with_platform_kind() {
-        let claims = Claims::platform(Uuid::now_v7(), PlatformRole::Owner);
-
+        let claims = Claims::platform(Uuid::now_v7());
         let serialized = serde_json::to_value(&claims).unwrap();
-
         assert_eq!(serialized["kind"], "platform");
-        assert_eq!(serialized["role"], "owner");
     }
 
     #[test]
@@ -144,25 +136,20 @@ mod tests {
         install_crypto_provider();
         let secret = b"secret-that-is-at-least-32-bytes-long";
         let sub = Uuid::now_v7();
-        let claims = Claims::platform(sub, PlatformRole::User);
+        let claims = Claims::platform(sub);
 
         let response = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
         let claims = verify(&response, &DecodingKey::from_secret(secret)).unwrap();
         assert_eq!(claims.sub, sub);
         assert_eq!(claims.iss, "domus");
-        assert!(matches!(
-            claims.data,
-            ClaimData::Platform {
-                role: PlatformRole::User
-            }
-        ));
+        assert!(matches!(claims.data, ClaimData::Platform));
     }
 
     #[test]
     fn verify_rejects_token_signed_with_different_secret() {
         install_crypto_provider();
-        let claims = Claims::platform(Uuid::now_v7(), PlatformRole::User);
+        let claims = Claims::platform(Uuid::now_v7());
         let token = generate(
             &claims,
             &EncodingKey::from_secret(b"secret-that-is-at-least-32-bytes-long"),
@@ -189,13 +176,11 @@ mod tests {
             iat: now - 3600,
             nbf: now - 3600,
             exp: now - 1800,
-            data: ClaimData::Platform {
-                role: PlatformRole::User,
-            },
+            data: ClaimData::Platform,
         };
-        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
-        let err = super::verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
+        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
+        let err = verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
 
         assert!(matches!(err, JwtError::Invalid(_)));
     }
@@ -204,11 +189,11 @@ mod tests {
     fn verify_rejects_token_with_wrong_issuer() {
         install_crypto_provider();
         let secret = b"secret-that-is-at-least-32-bytes-long";
-        let mut claims = Claims::platform(Uuid::now_v7(), PlatformRole::User);
+        let mut claims = Claims::platform(Uuid::now_v7());
         claims.iss = "not-domus".into();
-        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
 
-        let err = super::verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
+        let token = generate(&claims, &EncodingKey::from_secret(secret)).unwrap();
+        let err = verify(&token, &DecodingKey::from_secret(secret)).unwrap_err();
 
         assert!(matches!(err, JwtError::Invalid(_)));
     }

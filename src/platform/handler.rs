@@ -15,11 +15,11 @@ use crate::{
     app::AppState,
     auth::{
         jwt::{self, Claims},
-        middleware::{PlatformAuth, require_platform_auth},
+        middleware::require_platform_auth,
     },
     error::ProblemDetails,
     extractors::validated_json::ValidatedJson,
-    platform::dto::MeResponse,
+    platform::{api::PlatformUser, dto::MeResponse},
 };
 
 // NOTE:
@@ -50,7 +50,7 @@ async fn login(
 ) -> Result<impl IntoResponse, ProblemDetails> {
     let user = service::login(&state.pool, &req.email, &req.password).await?;
 
-    let claims = Claims::platform(user.id, user.role);
+    let claims = Claims::platform(user.id);
     let res = LoginResponse {
         token: jwt::generate(&claims, &state.encoding_key)?,
     };
@@ -60,7 +60,7 @@ async fn login(
 
 async fn register(
     State(state): State<AppState>,
-    Extension(auth): Extension<PlatformAuth>,
+    Extension(auth): Extension<PlatformUser>,
     ValidatedJson(req): ValidatedJson<CreateUserRequest>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
     authorize_create_user(auth.role, req.role)?;
@@ -86,11 +86,9 @@ fn authorize_create_user(
 }
 
 async fn get_authenticated_user(
-    State(state): State<AppState>,
-    Extension(auth): Extension<PlatformAuth>,
+    Extension(auth): Extension<PlatformUser>,
 ) -> Result<impl IntoResponse, ProblemDetails> {
-    let user = service::get_user_by_id(&state.pool, auth.user_id).await?;
-    Ok((StatusCode::OK, Json(MeResponse::from(user))))
+    Ok((StatusCode::OK, Json(MeResponse::from(auth))))
 }
 
 #[cfg(test)]

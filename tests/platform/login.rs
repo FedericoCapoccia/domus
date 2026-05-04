@@ -1,8 +1,5 @@
 use axum::http::StatusCode;
-use domus::{
-    api::platform::{LoginResponse, PlatformRole},
-    jwt,
-};
+use domus::{api::platform::LoginResponse, jwt};
 use jsonwebtoken::DecodingKey;
 use sqlx::PgPool;
 
@@ -34,12 +31,7 @@ async fn login_with_valid_credentials_returns_jwt(pool: PgPool) {
     assert_eq!(claims.nbf, claims.iat);
     assert!(claims.nbf <= claims.exp);
     assert!(claims.exp > time::OffsetDateTime::now_utc().unix_timestamp());
-    assert!(matches!(
-        claims.data,
-        jwt::ClaimData::Platform {
-            role: PlatformRole::User
-        }
-    ));
+    assert!(matches!(claims.data, jwt::ClaimData::Platform));
 }
 
 #[sqlx::test(migrations = "./migrations")]

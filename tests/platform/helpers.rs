@@ -3,7 +3,7 @@ use axum::{
     extract::Request,
     http::{HeaderValue, Response, header},
 };
-use domus::{AppState, api::platform::PlatformRole, build_router, jwt, password};
+use domus::{AppState, build_router, jwt, password};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -38,9 +38,9 @@ pub async fn seed_platform_user(pool: &PgPool, email: &str, password: &str, role
     .unwrap()
 }
 
-pub fn platform_token(user_id: Uuid, role: PlatformRole) -> String {
+pub fn platform_token(user_id: Uuid) -> String {
     jwt::generate(
-        &jwt::Claims::platform(user_id, role),
+        &jwt::Claims::platform(user_id),
         &EncodingKey::from_secret(JWT_SECRET),
     )
     .unwrap()

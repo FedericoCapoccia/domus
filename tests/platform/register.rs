@@ -2,7 +2,6 @@ use axum::http::StatusCode;
 use domus::api::platform::{CreateUserResponse, PlatformRole};
 use serde_json::json;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::helpers;
 
@@ -11,7 +10,8 @@ const TEST_EMAIL: &str = "user@example.com";
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_returns_201(pool: PgPool) {
-    let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::Admin);
+    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+    let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
     let body = serde_json::json!({
@@ -30,7 +30,8 @@ async fn register_returns_201(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_normalizes_email(pool: PgPool) {
-    let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::Admin);
+    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+    let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
     let body = serde_json::json!({
@@ -56,7 +57,8 @@ async fn register_normalizes_email(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_duplicate_email_returns_409(pool: PgPool) {
-    let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::Admin);
+    let id = helpers::seed_platform_user(&pool, "admin@example.com", TEST_PASSWORD, "admin").await;
+    let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
 
     let body = serde_json::json!({
@@ -75,7 +77,8 @@ async fn register_duplicate_email_returns_409(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_forbidden_when_actor_lacks_permission(pool: PgPool) {
-    let token = helpers::platform_token(Uuid::now_v7(), PlatformRole::User);
+    let id = helpers::seed_platform_user(&pool, "actor@example.com", TEST_PASSWORD, "user").await;
+    let token = helpers::platform_token(id);
     let mut app = helpers::app(pool);
     let body = json!({
         "email": TEST_EMAIL,

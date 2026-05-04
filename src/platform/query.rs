@@ -18,7 +18,7 @@ where
 {
     sqlx::query_as!(
         PlatformUserCredentials,
-        r#"SELECT id, password_hash, role as "role: _" FROM platform_user WHERE email = $1"#,
+        r#"SELECT id, password_hash FROM platform_user WHERE email = $1"#,
         email
     )
     .fetch_optional(executor)

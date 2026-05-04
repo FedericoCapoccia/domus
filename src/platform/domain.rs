@@ -26,10 +26,9 @@ impl fmt::Display for PlatformRole {
 pub struct PlatformUserCredentials {
     pub id: Uuid,
     pub password_hash: String,
-    pub role: PlatformRole,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Clone)]
 pub struct PlatformUser {
     pub id: Uuid,
     pub email: String,
