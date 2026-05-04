@@ -27,19 +27,13 @@ use crate::{
     },
 };
 
-// NOTE:
-// - DELETE /users/:id -> owner can delete all but himself, admin can delete role='user'
-// - POST /users/:id/role -> owner can modify roles
-// pub fn router() -> Router<AppState> {
-// Router::new()
-// .route("/login", post(login))
-// .route("/logout", post(async || {}))
-// .route("/users", get(async || {}))
-// .route("/users/id", get(async || {}))
-// .route("/users/id", delete(async || {}))
-// .route("/users/id/role", post(async || {}))
-// .route("/me", patch(async || {}))
-// }
+// Missing routes
+// GET /users (owner+admin)
+// POST /logout -> Need refresh tokens and invalidation first
+// GET /users/{id} (owner+admin)
+// DELETE /users/{id} (owner+admin) [no self, no higher role]
+// POST /users/{id}/role (owner) [no self]
+// PATCH /me (self)
 
 pub fn router(state: AppState) -> Router<AppState> {
     let protected = Router::new()
@@ -49,6 +43,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/users/{id}/enable", post(enable_user))
         .route("/users/{id}/disable", post(disable_user))
         .route_layer(middleware::from_fn_with_state(state, require_platform_auth));
+
     Router::new().route("/login", post(login)).merge(protected)
 }
 

@@ -36,6 +36,13 @@ use tower_http::trace::TraceLayer;
 
 use crate::platform::service::ensure_owner;
 
+// Missing features
+// - TLS on both DB and Listener
+// - Password reset
+// - Email confirmation
+// - Graceful shutdown
+// - Rate limiting
+
 pub async fn run() -> anyhow::Result<()> {
     auth::jwt::install_crypto_provider();
 
